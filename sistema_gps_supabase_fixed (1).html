@@ -1,0 +1,2908 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GRUPO GPS – Sistema de RH | Feirões de Emprego</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════
+//  CONFIGURAÇÃO SUPABASE
+//  1. Acesse https://supabase.com e crie um projeto gratuito
+//  2. Vá em Project Settings → API
+//  3. Copie a "Project URL" e a "anon public" key abaixo
+//  4. Execute o SQL abaixo no Supabase SQL Editor para criar as tabelas:
+//
+//  CREATE TABLE feiraos      (id TEXT PRIMARY KEY, data JSONB);
+//  CREATE TABLE candidatos   (id TEXT PRIMARY KEY, data JSONB);
+//  CREATE TABLE recrutadores (id TEXT PRIMARY KEY, data JSONB);
+//  CREATE TABLE eventos      (id TEXT PRIMARY KEY, data JSONB);
+//  ALTER TABLE feiraos      ENABLE ROW LEVEL SECURITY;
+//  ALTER TABLE candidatos   ENABLE ROW LEVEL SECURITY;
+//  ALTER TABLE recrutadores ENABLE ROW LEVEL SECURITY;
+//  ALTER TABLE eventos      ENABLE ROW LEVEL SECURITY;
+//  CREATE POLICY "public_all" ON feiraos      FOR ALL USING (true) WITH CHECK (true);
+//  CREATE POLICY "public_all" ON candidatos   FOR ALL USING (true) WITH CHECK (true);
+//  CREATE POLICY "public_all" ON recrutadores FOR ALL USING (true) WITH CHECK (true);
+//  CREATE POLICY "public_all" ON eventos      FOR ALL USING (true) WITH CHECK (true);
+//  ALTER PUBLICATION supabase_realtime ADD TABLE feiraos, candidatos, recrutadores, eventos;
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://cjpufjwhjdttxfoggiyj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqcHVmandoamR0dHhmb2dnaXlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDIzNzksImV4cCI6MjA5NjE3ODM3OX0.tVKtrGylNKZtUwUYlVnTbqDaofTKDsVD83A4eVkY1FQ';
+
+window._cache = { feiraos: [], candidatos: [], recrutadores: [], eventos: [] };
+window._cacheReady = { feiraos: false, candidatos: false, recrutadores: false, eventos: false };
+window._useLocalFallback = (SUPABASE_URL === 'COLE_SUA_PROJECT_URL_AQUI');
+
+const _LS = {
+  get: k => JSON.parse(localStorage.getItem('gps_'+k)||'null'),
+  set: (k,v) => localStorage.setItem('gps_'+k, JSON.stringify(v)),
+};
+
+let _sb = null;
+
+if (!window._useLocalFallback) {
+  try {
+    _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function _loadTable(table) {
+      const { data, error } = await _sb.from(table).select('data');
+      if (error) {
+        const msg = error.message || error.details || error.hint || JSON.stringify(error);
+        throw new Error(`Tabela "${table}": ${msg}`);
+      }
+      const rows = (data || []).map(r => r.data);
+      window._cache[table] = rows;
+      _LS.set(table, rows);
+      window._cacheReady[table] = true;
+    }
+
+    function _setupRealtime(table) {
+      _sb.channel('rt_' + table)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+          _sb.from(table).select('data').then(({ data }) => {
+            if (data) {
+              const rows = data.map(r => r.data);
+              window._cache[table] = rows;
+              _LS.set(table, rows);
+              if (window._appReady) {
+                window.refreshPage(window.currentPage);
+                if (window.currentPage === 'dashboard') window.renderDashboard();
+              }
+            }
+          });
+        })
+        .subscribe();
+    }
+
+    window._initSupabase = async () => {
+      const tables = ['feiraos','candidatos','recrutadores','eventos'];
+      let anyFailed = false;
+      for (const table of tables) {
+        try {
+          await _loadTable(table);
+        } catch(e) {
+          console.error(`Supabase init error [${table}]:`, e.message || e);
+          // Fallback: usa cache local se existir
+          const cached = _LS.get(table);
+          if (cached) {
+            window._cache[table] = cached;
+            window._cacheReady[table] = true;
+            console.warn(`[${table}] usando cache local como fallback`);
+          } else {
+            window._cache[table] = [];
+            window._cacheReady[table] = true;
+          }
+          anyFailed = true;
+        }
+      }
+      // Só configura realtime para tabelas que carregaram com sucesso
+      tables.forEach(t => {
+        if (!anyFailed || window._cacheReady[t]) {
+          try { _setupRealtime(t); } catch(e) { console.warn('Realtime setup failed for', t, e); }
+        }
+      });
+      if (anyFailed) {
+        window._showSetupWarning();
+      }
+    };
+
+    window._sbSaveBatch = async (table, newArr) => {
+      // Busca IDs atuais direto do banco para garantir que deletes funcionem
+      // mesmo quando o cache local estiver desatualizado (outro PC inseriu algo)
+      const { data: remoteRows, error: fetchErr } = await _sb.from(table).select('id');
+      const remoteIds = fetchErr ? [] : (remoteRows || []).map(r => r.id);
+      const newIds = new Set(newArr.map(x => x.id));
+
+      // Upsert de todos os registros novos/editados
+      if (newArr.length) {
+        const rows = newArr.map(item => ({ id: item.id, data: item }));
+        const { error } = await _sb.from(table).upsert(rows, { onConflict: 'id' });
+        if (error) console.error('Supabase upsert error', table, error.message || JSON.stringify(error));
+      }
+
+      // Deleta apenas registros que existem no banco mas não estão no newArr
+      const idsToDelete = remoteIds.filter(id => !newIds.has(id));
+      if (idsToDelete.length) {
+        const { error } = await _sb.from(table).delete().in('id', idsToDelete);
+        if (error) console.error('Supabase delete error', table, error.message || JSON.stringify(error));
+      }
+
+      // Se newArr estiver vazio mas havia registros remotos, limpa a tabela
+      if (newArr.length === 0 && remoteIds.length > 0) {
+        const { error } = await _sb.from(table).delete().in('id', remoteIds);
+        if (error) console.error('Supabase delete-all error', table, error.message || JSON.stringify(error));
+      }
+    };
+
+  } catch(e) {
+    console.error('Supabase setup error:', e);
+    window._useLocalFallback = true;
+  }
+}
+
+window._showSetupWarning = () => {
+  if (document.getElementById('sb-warning')) return;
+  const b = document.createElement('div');
+  b.id = 'sb-warning';
+  b.style.cssText = 'position:fixed;top:60px;left:240px;right:0;z-index:9999;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:11px 20px;display:flex;align-items:center;gap:12px;font-size:.83rem;color:#92400e';
+  b.innerHTML = `
+    <span style="font-size:1.2rem">⚠️</span>
+    <div style="flex:1">
+      <strong>Supabase não configurado.</strong>
+      Preencha <code>SUPABASE_URL</code> e <code>SUPABASE_KEY</code> no início do script para ativar o banco online e sincronização em tempo real.
+      <a href="https://supabase.com/dashboard" target="_blank" style="color:#b45309;font-weight:700;margin-left:6px">Abrir Dashboard →</a>
+      <span style="margin-left:6px;color:#78716c">— Sistema funcionando localmente até a configuração.</span>
+    </div>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#92400e;padding:2px 6px">✕</button>
+  `;
+  document.body.appendChild(b);
+};
+
+if (window._useLocalFallback) {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(window._showSetupWarning, 700));
+}
+</script>
+<style>
+:root {
+  --blue-900: #0a1628;
+  --blue-800: #0d2142;
+  --blue-700: #1a3a6b;
+  --blue-600: #1e4d9b;
+  --blue-500: #2563eb;
+  --blue-400: #3b82f6;
+  --blue-300: #60a5fa;
+  --blue-200: #bfdbfe;
+  --blue-100: #dbeafe;
+  --blue-50: #eff6ff;
+  --gray-900: #111827;
+  --gray-700: #374151;
+  --gray-500: #6b7280;
+  --gray-300: #d1d5db;
+  --gray-100: #f3f4f6;
+  --white: #ffffff;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --red: #dc2626;
+  --red-light: #fee2e2;
+  --yellow: #ca8a04;
+  --yellow-light: #fef9c3;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --sidebar-w: 240px;
+  --header-h: 60px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); display: flex; min-height: 100vh; }
+
+/* ── SIDEBAR ── */
+#sidebar {
+  width: var(--sidebar-w); min-height: 100vh; background: var(--blue-900);
+  display: flex; flex-direction: column; position: fixed; left: 0; top: 0; z-index: 100;
+  transition: transform .3s;
+}
+#sidebar-logo { padding: 18px 16px; border-bottom: 1px solid var(--blue-700); }
+#sidebar-logo .brand { color: var(--white); font-weight: 800; font-size: 1.1rem; letter-spacing: .5px; }
+#sidebar-logo .sub { color: var(--blue-300); font-size: .72rem; margin-top: 2px; }
+#sidebar nav { flex: 1; padding: 12px 0; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+  color: var(--blue-200); cursor: pointer; font-size: .88rem; font-weight: 500;
+  border-left: 3px solid transparent; transition: all .15s; user-select: none;
+}
+.nav-item:hover { background: var(--blue-800); color: var(--white); }
+.nav-item.active { background: var(--blue-700); color: var(--white); border-left-color: var(--blue-400); }
+.nav-item svg { flex-shrink: 0; opacity: .8; }
+#sidebar-footer { padding: 14px 16px; border-top: 1px solid var(--blue-700); color: var(--blue-300); font-size: .72rem; }
+
+/* ── MAIN ── */
+#main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+#topbar {
+  height: var(--header-h); background: var(--white); border-bottom: 1px solid var(--gray-300);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 24px;
+  position: sticky; top: 0; z-index: 90; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+#topbar-title { font-weight: 700; font-size: 1rem; color: var(--blue-800); }
+#global-search-wrap { position: relative; }
+#global-search {
+  border: 1px solid var(--gray-300); border-radius: 8px; padding: 7px 14px 7px 36px;
+  font-size: .85rem; width: 280px; outline: none; transition: border .2s;
+  background: var(--gray-100);
+}
+#global-search:focus { border-color: var(--blue-400); background: var(--white); }
+#global-search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gray-500); pointer-events: none; }
+#search-results-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--white);
+  border: 1px solid var(--gray-300); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  max-height: 380px; overflow-y: auto; z-index: 200; display: none;
+}
+.srd-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--gray-100); font-size: .83rem; }
+.srd-item:hover { background: var(--blue-50); }
+.srd-item .srd-name { font-weight: 600; color: var(--blue-700); }
+.srd-item .srd-meta { color: var(--gray-500); font-size: .78rem; margin-top: 2px; }
+.srd-empty { padding: 16px; text-align: center; color: var(--gray-500); font-size: .83rem; }
+#topbar-actions { display: flex; gap: 8px; align-items: center; }
+#menu-toggle { display: none; background: none; border: none; cursor: pointer; color: var(--gray-700); }
+
+/* ── CONTENT ── */
+#content { flex: 1; padding: 28px 28px 40px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--white); border: 1px solid var(--gray-300); border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04); overflow: hidden;
+}
+.card-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--gray-100);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+}
+.card-title { font-weight: 700; font-size: .95rem; color: var(--blue-800); }
+.card-body { padding: 20px; }
+
+/* ── STAT CARDS ── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--white); border-radius: 12px; padding: 18px 20px;
+  border: 1px solid var(--gray-300); box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.stat-card .stat-label { font-size: .78rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; }
+.stat-card .stat-value { font-size: 2rem; font-weight: 800; color: var(--blue-700); }
+.stat-card .stat-sub { font-size: .75rem; color: var(--gray-500); }
+.stat-card.green .stat-value { color: var(--green); }
+.stat-card.red .stat-value { color: var(--red); }
+.stat-card.yellow .stat-value { color: var(--yellow); }
+.stat-card.purple .stat-value { color: var(--purple); }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+  border-radius: 8px; font-size: .84rem; font-weight: 600; cursor: pointer;
+  border: none; transition: all .15s; white-space: nowrap;
+}
+.btn-primary { background: var(--blue-600); color: var(--white); }
+.btn-primary:hover { background: var(--blue-700); }
+.btn-secondary { background: var(--gray-100); color: var(--gray-700); border: 1px solid var(--gray-300); }
+.btn-secondary:hover { background: var(--gray-300); }
+.btn-danger { background: var(--red-light); color: var(--red); }
+.btn-danger:hover { background: #fca5a5; }
+.btn-success { background: var(--green-light); color: var(--green); }
+.btn-success:hover { background: #86efac; }
+.btn-sm { padding: 5px 10px; font-size: .78rem; }
+.btn-icon { padding: 6px; border-radius: 6px; background: none; border: 1px solid var(--gray-300); color: var(--gray-700); cursor: pointer; transition: all .15s; }
+.btn-icon:hover { background: var(--gray-100); }
+
+/* ── FORMS ── */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label { font-size: .8rem; font-weight: 600; color: var(--gray-700); }
+.form-group input, .form-group select, .form-group textarea {
+  border: 1px solid var(--gray-300); border-radius: 8px; padding: 8px 12px;
+  font-size: .85rem; outline: none; transition: border .2s; background: var(--white); color: var(--gray-900);
+  font-family: inherit;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--blue-400); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+.form-group textarea { resize: vertical; min-height: 70px; }
+.form-group input[readonly], .form-group select[disabled] { background: var(--gray-100); color: var(--gray-500); cursor: not-allowed; }
+.form-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+thead th { background: var(--blue-50); color: var(--blue-800); font-weight: 700; padding: 10px 14px; text-align: left; white-space: nowrap; border-bottom: 2px solid var(--blue-200); }
+tbody tr { border-bottom: 1px solid var(--gray-100); transition: background .1s; }
+tbody tr:hover { background: var(--blue-50); }
+tbody td { padding: 10px 14px; color: var(--gray-700); vertical-align: middle; }
+.no-data { text-align: center; padding: 40px; color: var(--gray-500); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-block; padding: 3px 9px; border-radius: 12px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+}
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-red { background: var(--red-light); color: var(--red); }
+.badge-yellow { background: var(--yellow-light); color: var(--yellow); }
+.badge-blue { background: var(--blue-100); color: var(--blue-700); }
+.badge-purple { background: var(--purple-light); color: var(--purple); }
+.badge-gray { background: var(--gray-100); color: var(--gray-500); }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300;
+  display: none; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--white); border-radius: 14px; width: 100%; max-width: 620px;
+  max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.25);
+}
+.modal-header { padding: 18px 22px; border-bottom: 1px solid var(--gray-300); display: flex; align-items: center; justify-content: space-between; }
+.modal-title { font-weight: 700; font-size: 1rem; color: var(--blue-800); }
+.modal-close { background: none; border: none; cursor: pointer; color: var(--gray-500); font-size: 1.2rem; line-height: 1; padding: 2px; }
+.modal-body { padding: 22px; }
+.modal-footer { padding: 14px 22px; border-top: 1px solid var(--gray-100); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ── FILTER BAR ── */
+.filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+.filter-bar input, .filter-bar select { border: 1px solid var(--gray-300); border-radius: 8px; padding: 7px 12px; font-size: .83rem; outline: none; background: var(--white); }
+.filter-bar input:focus, .filter-bar select:focus { border-color: var(--blue-400); }
+
+/* ── TABS ── */
+.tab-bar { display: flex; gap: 4px; border-bottom: 2px solid var(--gray-300); margin-bottom: 20px; overflow-x: auto; }
+.tab-btn { padding: 9px 18px; font-size: .85rem; font-weight: 600; color: var(--gray-500); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: all .15s; }
+.tab-btn.active { color: var(--blue-600); border-bottom-color: var(--blue-600); }
+.tab-btn:hover:not(.active) { color: var(--blue-700); background: var(--blue-50); border-radius: 6px 6px 0 0; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── TOAST ── */
+#toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  padding: 12px 18px; border-radius: 10px; font-size: .84rem; font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15); animation: slideIn .3s ease;
+  max-width: 320px; display: flex; align-items: center; gap: 8px;
+}
+.toast-success { background: var(--green); color: var(--white); }
+.toast-error { background: var(--red); color: var(--white); }
+.toast-info { background: var(--blue-600); color: var(--white); }
+@keyframes slideIn { from { transform: translateX(60px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ── CHARTS ── */
+.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.chart-card { background: var(--white); border: 1px solid var(--gray-300); border-radius: 12px; padding: 20px; }
+.chart-card h4 { font-size: .88rem; font-weight: 700; color: var(--blue-800); margin-bottom: 14px; }
+.chart-wrap { position: relative; height: 220px; }
+
+/* ── PROGRESS ── */
+.progress-bar { height: 8px; background: var(--gray-200); border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
+
+/* ── IMPORT DROP ZONE ── */
+.drop-zone {
+  border: 2px dashed var(--blue-300); border-radius: 12px; padding: 32px;
+  text-align: center; cursor: pointer; transition: all .2s; background: var(--blue-50);
+}
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--blue-500); background: var(--blue-100); }
+.drop-zone svg { color: var(--blue-400); margin-bottom: 12px; }
+.drop-zone p { color: var(--blue-700); font-weight: 600; font-size: .9rem; }
+.drop-zone small { color: var(--gray-500); font-size: .78rem; }
+
+/* ── AUTOCOMPLETE ── */
+.autocomplete-wrap { position: relative; }
+.autocomplete-list {
+  position: absolute; top: 100%; left: 0; right: 0; background: var(--white);
+  border: 1px solid var(--gray-300); border-top: none; border-radius: 0 0 8px 8px;
+  max-height: 180px; overflow-y: auto; z-index: 150; box-shadow: 0 6px 16px rgba(0,0,0,.1);
+}
+.autocomplete-list div { padding: 8px 12px; cursor: pointer; font-size: .84rem; }
+.autocomplete-list div:hover { background: var(--blue-50); color: var(--blue-700); }
+
+/* ── CALENDAR STYLES (NEW) ── */
+.cal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; gap: 12px; flex-wrap: wrap;
+}
+.cal-nav-btn {
+  background: var(--white); border: 1px solid var(--gray-300); border-radius: 8px;
+  width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; font-size: 1rem; color: var(--blue-700); transition: all .15s;
+}
+.cal-nav-btn:hover { background: var(--blue-50); border-color: var(--blue-400); }
+.cal-month-label { font-size: 1.1rem; font-weight: 800; color: var(--blue-800); min-width: 200px; text-align: center; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-dow {
+  text-align: center; font-size: .72rem; font-weight: 700; color: var(--gray-500);
+  text-transform: uppercase; padding: 8px 4px; letter-spacing: .5px;
+}
+.cal-dow:first-child, .cal-dow:last-child { color: var(--red); }
+.cal-day {
+  min-height: 90px; background: var(--white); border: 1px solid var(--gray-200);
+  border-radius: 8px; padding: 6px; cursor: pointer; transition: all .15s;
+  position: relative; overflow: hidden;
+}
+.cal-day:hover { border-color: var(--blue-400); background: var(--blue-50); }
+.cal-day.other-month { background: var(--gray-100); opacity: .55; }
+.cal-day.today { border-color: var(--blue-500); border-width: 2px; }
+.cal-day.today .cal-day-num { background: var(--blue-600); color: var(--white); border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.cal-day.has-events { background: var(--blue-50); }
+.cal-day-num { font-size: .82rem; font-weight: 700; color: var(--gray-700); margin-bottom: 4px; }
+.cal-day.other-month .cal-day-num { color: var(--gray-400); }
+.cal-event-pill {
+  font-size: .68rem; font-weight: 600; border-radius: 4px; padding: 2px 5px;
+  margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; display: block; line-height: 1.4;
+}
+.cal-event-pill:hover { opacity: .8; filter: brightness(.92); }
+.cal-event-blue { background: var(--blue-100); color: var(--blue-700); }
+.cal-event-green { background: var(--green-light); color: var(--green); }
+.cal-event-red { background: var(--red-light); color: var(--red); }
+.cal-event-yellow { background: var(--yellow-light); color: var(--yellow); }
+.cal-event-purple { background: var(--purple-light); color: var(--purple); }
+.cal-event-gray { background: var(--gray-100); color: var(--gray-600); }
+.cal-more { font-size: .68rem; color: var(--blue-600); font-weight: 700; cursor: pointer; }
+
+/* Calendar sidebar */
+.cal-layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+@media (max-width: 900px) { .cal-layout { grid-template-columns: 1fr; } }
+.cal-sidebar { display: flex; flex-direction: column; gap: 16px; }
+.cal-upcoming { background: var(--white); border: 1px solid var(--gray-300); border-radius: 12px; overflow: hidden; }
+.cal-upcoming-header { padding: 14px 16px; background: var(--blue-900); color: var(--white); font-weight: 700; font-size: .88rem; }
+.cal-upcoming-list { padding: 8px; max-height: 400px; overflow-y: auto; }
+.cal-upcoming-item {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 8px;
+  border-radius: 8px; cursor: pointer; transition: background .1s; border-bottom: 1px solid var(--gray-100);
+}
+.cal-upcoming-item:hover { background: var(--blue-50); }
+.cal-upcoming-item:last-child { border-bottom: none; }
+.cal-up-date { min-width: 42px; text-align: center; background: var(--blue-50); border-radius: 8px; padding: 4px; }
+.cal-up-date .cal-up-day { font-size: 1.1rem; font-weight: 800; color: var(--blue-700); line-height: 1; }
+.cal-up-date .cal-up-mon { font-size: .66rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; }
+.cal-up-info .cal-up-title { font-size: .82rem; font-weight: 700; color: var(--gray-800); }
+.cal-up-info .cal-up-meta { font-size: .74rem; color: var(--gray-500); margin-top: 2px; }
+
+/* Legend */
+.cal-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cal-legend-item { display: flex; align-items: center; gap: 5px; font-size: .76rem; color: var(--gray-600); }
+.cal-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  #sidebar { transform: translateX(-100%); }
+  #sidebar.open { transform: translateX(0); }
+  #main { margin-left: 0; }
+  #menu-toggle { display: flex; }
+  #content { padding: 16px; }
+  #global-search { width: 180px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .form-grid { grid-template-columns: 1fr; }
+  .cal-day { min-height: 60px; }
+}
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  #global-search { width: 140px; }
+  .cal-day { min-height: 44px; }
+  .cal-event-pill { display: none; }
+}
+
+/* ── MISC ── */
+.text-center { text-align: center; }
+.mt-4 { margin-top: 16px; }
+.mb-4 { margin-bottom: 16px; }
+.gap-2 { gap: 8px; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.flex-wrap { flex-wrap: wrap; }
+.font-bold { font-weight: 700; }
+.text-sm { font-size: .82rem; }
+.text-muted { color: var(--gray-500); }
+hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
+.tag-bt { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 10px; background: var(--purple-light); color: var(--purple); font-size: .72rem; font-weight: 700; }
+.overlay-close { position: fixed; inset: 0; z-index: 99; display: none; }
+.overlay-close.open { display: block; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside id="sidebar">
+  <div id="sidebar-logo">
+    <div class="brand">⬡ GRUPO GPS</div>
+    <div class="sub">Recrutamento &amp; Seleção · RH System</div>
+  </div>
+  <nav id="sidebar-nav">
+    <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Início
+    </div>
+    <div class="nav-item" data-page="feiraos" onclick="navigate('feiraos')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Feirões de Emprego
+    </div>
+    <div class="nav-item" data-page="candidatos" onclick="navigate('candidatos')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Candidatos
+    </div>
+    <div class="nav-item" data-page="talentos" onclick="navigate('talentos')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      Banco de Talentos
+    </div>
+    <div class="nav-item" data-page="calendario" onclick="navigate('calendario')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/></svg>
+      Calendário
+    </div>
+    <div class="nav-item" data-page="analytics" onclick="navigate('analytics')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Analytics
+    </div>
+    <div class="nav-item" data-page="importar" onclick="navigate('importar')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar Excel
+    </div>
+    <div class="nav-item" data-page="recrutadores" onclick="navigate('recrutadores')">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Recrutadores
+    </div>
+  </nav>
+  <div id="sidebar-footer">v2.1 · GRUPO GPS · 2024</div>
+</aside>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- TOPBAR -->
+  <header id="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button id="menu-toggle" onclick="toggleSidebar()">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span id="topbar-title">Dashboard</span>
+    </div>
+    <div id="global-search-wrap">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="global-search" type="text" placeholder="Busca global…" autocomplete="off" oninput="doGlobalSearch(this.value)" onfocus="doGlobalSearch(this.value)"/>
+      <div id="search-results-dropdown"></div>
+    </div>
+    <div id="topbar-actions">
+      <button class="btn btn-danger btn-sm" onclick="confirmClearAllData()" title="Apagar todos os dados do banco">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        Zerar Dados
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="autoBackup()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Backup
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main id="content">
+
+    <!-- PAGE: DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:1.25rem;font-weight:800;color:var(--blue-800)">Início</h2>
+        <p class="text-muted text-sm">Visão consolidada de todos os feirões e candidatos</p>
+      </div>
+      <div class="stats-grid" id="dash-stats"></div>
+      <div class="charts-grid" id="dash-charts">
+        <div class="chart-card">
+          <h4>Distribuição de Status</h4>
+          <div class="chart-wrap"><canvas id="chartStatusDash"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h4>Candidatos por Feirão (Top 8)</h4>
+          <div class="chart-wrap"><canvas id="chartFeiraoDash"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h4>Antecedentes</h4>
+          <div class="chart-wrap"><canvas id="chartAntDash"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h4>Recontratação</h4>
+          <div class="chart-wrap"><canvas id="chartRecontDash"></canvas></div>
+        </div>
+      </div>
+      <div class="mt-4" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px" id="dash-bottom">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Feirões Recentes</span></div>
+          <div class="card-body" id="dash-recent-feiraos"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Motivos de Reprovação (Top 5)</span></div>
+          <div class="card-body" id="dash-motivos"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: FEIRÕES -->
+    <div id="page-feiraos" class="page">
+      <div class="flex justify-between items-center mb-4 flex-wrap" style="gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">Feirões de Emprego</h2>
+          <p class="text-muted text-sm" id="feiraos-count-label"></p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="exportFeiraosExcel()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Excel
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="openFeiraModal()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Feirão
+          </button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input id="f-search-feirao" type="text" placeholder="Buscar por nome…" oninput="renderFeiraos()" style="min-width:180px"/>
+        <input id="f-search-recrutador" type="text" placeholder="Recrutador…" oninput="renderFeiraos()" style="min-width:150px"/>
+        <input id="f-search-cidade" type="text" placeholder="Cidade…" oninput="renderFeiraos()" style="min-width:130px"/>
+        <select id="f-status-feirao" onchange="renderFeiraos()">
+          <option value="">Todos os status</option>
+          <option value="ABERTO">Aberto</option>
+          <option value="ENCERRADO">Encerrado</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="clearFeiraFilters()">Limpar</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome do Feirão</th>
+                <th>Data</th>
+                <th>Local</th>
+                <th>Recrutador</th>
+                <th>Status</th>
+                <th>Candidatos</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="feiraos-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: CANDIDATOS -->
+    <div id="page-candidatos" class="page">
+      <div class="flex justify-between items-center mb-4 flex-wrap" style="gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">Candidatos</h2>
+          <p class="text-muted text-sm" id="cand-count-label"></p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="exportCandidatosExcel()">Excel</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCandidatosPDF()">PDF</button>
+          <button class="btn btn-primary btn-sm" onclick="openCandModal()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Candidato
+          </button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <select id="f-feirao-cand" onchange="renderCandidatos()">
+          <option value="">Todos os Feirões</option>
+        </select>
+        <input id="f-nome-cand" type="text" placeholder="Nome / CPF / CR…" oninput="renderCandidatos()" style="min-width:180px"/>
+        <input id="f-rec-cand" type="text" placeholder="Recrutador…" oninput="renderCandidatos()"/>
+        <select id="f-status-cand" onchange="renderCandidatos()">
+          <option value="">Todos os status</option>
+          <option value="APROVADO">Aprovado</option>
+          <option value="REPROVADO">Reprovado</option>
+          <option value="EM_ANALISE">Em Análise</option>
+          <option value="BANCO_TALENTOS">Banco de Talentos</option>
+        </select>
+        <select id="f-ant-cand" onchange="renderCandidatos()">
+          <option value="">Antecedentes</option>
+          <option value="APROVADO">Aprovado</option>
+          <option value="REPROVADO">Reprovado</option>
+        </select>
+        <select id="f-bt-cand" onchange="renderCandidatos()">
+          <option value="">Banco Talentos</option>
+          <option value="1">Sim</option>
+          <option value="0">Não</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>CR</th>
+                <th>Feirão</th>
+                <th>Recrutador</th>
+                <th>Status</th>
+                <th>Antecedentes</th>
+                <th>Pesquisa de Ex-Colaborador</th>
+                <th>BT</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="candidatos-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: BANCO DE TALENTOS -->
+    <div id="page-talentos" class="page">
+      <div class="flex justify-between items-center mb-4 flex-wrap" style="gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">⭐ Banco de Talentos</h2>
+          <p class="text-muted text-sm" id="bt-count-label"></p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="exportTalentosExcel()">Excel</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportTalentosPDF()">PDF</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input id="f-bt-nome" type="text" placeholder="Nome / CPF / CR…" oninput="renderTalentos()" style="min-width:180px"/>
+        <select id="f-bt-feirao" onchange="renderTalentos()">
+          <option value="">Todos os Feirões</option>
+        </select>
+        <input id="f-bt-cidade" type="text" placeholder="Cidade de origem…" oninput="renderTalentos()"/>
+        <input id="f-bt-rec" type="text" placeholder="Recrutador…" oninput="renderTalentos()"/>
+        <input id="f-bt-cr" type="text" placeholder="CR…" oninput="renderTalentos()"/>
+        <button class="btn btn-secondary btn-sm" onclick="clearBTFilters()">Limpar</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>CR</th>
+                <th>Feirão de Origem</th>
+                <th>Cidade</th>
+                <th>Recrutador</th>
+                <th>Pesquisa de Ex-Colaborador</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="talentos-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         PAGE: CALENDÁRIO (NOVA ABA)
+    ═══════════════════════════════════════════════════ -->
+    <div id="page-calendario" class="page">
+      <div class="flex justify-between items-center flex-wrap" style="gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">📅 Calendário</h2>
+          <p class="text-muted text-sm">Gerencie eventos, feirões e tarefas da equipe de RH</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="cal-view-type" onchange="renderCalendar()" style="border:1px solid var(--gray-300);border-radius:8px;padding:7px 12px;font-size:.83rem;background:var(--white)">
+            <option value="month">Mês</option>
+            <option value="agenda">Agenda</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="calGoToday()">Hoje</button>
+          <button class="btn btn-primary btn-sm" onclick="openEventModal()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Evento
+          </button>
+        </div>
+      </div>
+
+      <div class="cal-layout">
+        <!-- Main calendar -->
+        <div>
+          <div class="cal-header">
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="cal-nav-btn" onclick="calNavigate(-1)">&#8249;</button>
+              <span class="cal-month-label" id="cal-month-label"></span>
+              <button class="cal-nav-btn" onclick="calNavigate(1)">&#8250;</button>
+            </div>
+            <div class="cal-legend">
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--blue-200)"></div>Feirão</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--green-light)"></div>Entrevista</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--yellow-light)"></div>Tarefa</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--red-light)"></div>Prazo</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--purple-light)"></div>Reunião</div>
+              <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--gray-100)"></div>Outro</div>
+            </div>
+          </div>
+
+          <!-- Month view -->
+          <div id="cal-month-view">
+            <div class="cal-grid" id="cal-dow-row">
+              <div class="cal-dow">Dom</div>
+              <div class="cal-dow">Seg</div>
+              <div class="cal-dow">Ter</div>
+              <div class="cal-dow">Qua</div>
+              <div class="cal-dow">Qui</div>
+              <div class="cal-dow">Sex</div>
+              <div class="cal-dow">Sáb</div>
+            </div>
+            <div class="cal-grid" id="cal-days-grid" style="margin-top:4px"></div>
+          </div>
+
+          <!-- Agenda view -->
+          <div id="cal-agenda-view" style="display:none">
+            <div id="cal-agenda-list"></div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="cal-sidebar">
+          <div class="cal-upcoming">
+            <div class="cal-upcoming-header">📌 Próximos Eventos</div>
+            <div class="cal-upcoming-list" id="cal-upcoming-list">
+              <p class="text-muted text-sm" style="padding:16px;text-align:center">Nenhum evento próximo</p>
+            </div>
+          </div>
+
+          <!-- Quick stats -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">Resumo do Mês</span></div>
+            <div class="card-body" id="cal-month-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px"></div>
+          </div>
+
+          <!-- Feiroes sync info -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">🔗 Feirões Sincronizados</span></div>
+            <div class="card-body" id="cal-feiraos-sync" style="padding:14px"></div>
+          </div>
+
+          <!-- Ranking de Recrutadores -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">🏆 Ranking de Recrutadores</span></div>
+            <div class="card-body" id="cal-ranking-rec" style="padding:14px"></div>
+          </div>
+
+          <!-- Taxa de Aprovação por Recrutador -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">✅ Taxa de Aprovação por Recrutador</span></div>
+            <div class="card-body" id="cal-taxa-rec" style="padding:14px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: ANALYTICS -->
+    <div id="page-analytics" class="page">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">Analytics Center</h2>
+        <p class="text-muted text-sm">Métricas e indicadores de desempenho</p>
+      </div>
+      <div class="filter-bar" style="margin-bottom:20px">
+        <select id="an-feirao" onchange="renderAnalytics()">
+          <option value="">Todos os Feirões</option>
+        </select>
+        <input id="an-cidade" type="text" placeholder="Cidade…" oninput="renderAnalytics()"/>
+        <input id="an-rec" type="text" placeholder="Recrutador…" oninput="renderAnalytics()"/>
+        <select id="an-bt" onchange="renderAnalytics()">
+          <option value="">Banco Talentos</option>
+          <option value="1">Apenas BT</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="clearAnFilters();renderAnalytics()">Limpar</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportAnalyticsPDF()">PDF</button>
+      </div>
+      <div class="stats-grid" id="an-stats"></div>
+      <div class="charts-grid" style="margin-top:20px">
+        <div class="chart-card">
+          <h4>Distribuição de Status</h4>
+          <div class="chart-wrap"><canvas id="chartAnStatus"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h4>Antecedentes</h4>
+          <div class="chart-wrap"><canvas id="chartAnAnt"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h4>Candidatos por Feirão</h4>
+          <div class="chart-wrap"><canvas id="chartAnFeirao"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h4>Top 10 CRs</h4>
+          <div class="chart-wrap"><canvas id="chartAnCR"></canvas></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px" id="an-bottom">
+        <div class="chart-card">
+          <h4>Motivos de Reprovação</h4>
+          <div id="an-motivos-list"></div>
+        </div>
+        <div class="chart-card">
+          <h4>Ranking de Recrutadores</h4>
+          <div id="an-rec-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: IMPORTAR -->
+    <div id="page-importar" class="page">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">Importar Excel</h2>
+        <p class="text-muted text-sm">Importe candidatos via planilha .xlsx com validação automática</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="import-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Configuração da Importação</span></div>
+          <div class="card-body">
+            <div class="form-group" style="margin-bottom:14px">
+              <label>Feirão de destino *</label>
+              <select id="imp-feirao">
+                <option value="">Selecione um feirão…</option>
+              </select>
+            </div>
+            <div class="drop-zone" id="drop-zone" onclick="document.getElementById('imp-file').click()"
+              ondragover="event.preventDefault();this.classList.add('dragover')"
+              ondragleave="this.classList.remove('dragover')"
+              ondrop="handleDrop(event)">
+              <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <p>Arraste o arquivo .xlsx ou clique para selecionar</p>
+              <small>Colunas esperadas: nome, cpf, cr, statusProcesso, antecedentes, recontratacao, motivoReprovacao, observacoes, <strong>bancoTalentos</strong> (SIM/NAO)</small>
+            </div>
+            <input id="imp-file" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(event)"/>
+            <div id="imp-status" style="margin-top:12px"></div>
+            <div style="margin-top:12px">
+              <button class="btn btn-secondary btn-sm" onclick="downloadTemplate()">Baixar Modelo .xlsx</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Preview da Importação</span>
+            <button class="btn btn-primary btn-sm" id="btn-imp-confirm" onclick="confirmImport()" style="display:none">Confirmar Importação</button>
+          </div>
+          <div class="card-body" id="imp-preview">
+            <p class="text-muted text-sm text-center" style="padding:30px 0">Nenhum arquivo selecionado</p>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:20px">
+        <div class="card-header"><span class="card-title">Log de Erros da Última Importação</span></div>
+        <div class="card-body" id="imp-errors">
+          <p class="text-muted text-sm">Nenhum erro registrado.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: RECRUTADORES -->
+    <div id="page-recrutadores" class="page">
+      <div class="flex justify-between items-center mb-4 flex-wrap" style="gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">Recrutadores</h2>
+          <p class="text-muted text-sm" id="rec-count-label"></p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openRecModal()">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo Recrutador
+        </button>
+      </div>
+      <div class="filter-bar">
+        <input id="f-rec-nome" type="text" placeholder="Buscar recrutador…" oninput="renderRecrutadores()" style="min-width:200px"/>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Feirões</th><th>Total Candidatos</th><th>Aprovados</th><th>Taxa Aprovação</th><th>Ações</th></tr></thead>
+            <tbody id="rec-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- FEIRÃO MODAL -->
+<div class="modal-overlay" id="modal-feirao">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="mf-title">Novo Feirão</span>
+      <button class="modal-close" onclick="closeModal('modal-feirao')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Nome do Feirão *</label>
+          <input id="mf-nome" type="text" placeholder="Ex: Feirão GPS – São Paulo Junho/2024"/>
+        </div>
+        <div class="form-group">
+          <label>Data do Evento *</label>
+          <input id="mf-data" type="date"/>
+        </div>
+        <div class="form-group">
+          <label>Local / Cidade *</label>
+          <input id="mf-local" type="text" placeholder="Ex: São Paulo - SP"/>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Recrutador *</label>
+          <div class="autocomplete-wrap">
+            <input id="mf-rec-input" type="text" placeholder="Digite para buscar ou criar recrutador…" autocomplete="off" oninput="acRecrutador('mf-rec-input','mf-rec-list','mf-rec-id')" onfocus="acRecrutador('mf-rec-input','mf-rec-list','mf-rec-id')"/>
+            <div class="autocomplete-list" id="mf-rec-list" style="display:none"></div>
+          </div>
+          <input id="mf-rec-id" type="hidden"/>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="mf-status">
+            <option value="ABERTO">Aberto</option>
+            <option value="ENCERRADO">Encerrado</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Observações</label>
+          <textarea id="mf-obs" placeholder="Observações opcionais…"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-feirao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveFeirao()">Salvar Feirão</button>
+    </div>
+  </div>
+</div>
+
+<!-- CANDIDATO MODAL -->
+<div class="modal-overlay" id="modal-cand">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <span class="modal-title" id="mc-title">Novo Candidato</span>
+      <button class="modal-close" onclick="closeModal('modal-cand')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Feirão *</label>
+          <select id="mc-feirao" onchange="onFeiraoCandChange()">
+            <option value="">Selecione um feirão…</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Nome do Candidato *</label>
+          <input id="mc-nome" type="text" placeholder="Nome completo"/>
+        </div>
+        <div class="form-group">
+          <label>CPF *</label>
+          <input id="mc-cpf" type="text" placeholder="000.000.000-00" oninput="maskCPF(this)"/>
+        </div>
+        <div class="form-group">
+          <label>Telefone</label>
+          <input id="mc-tel" type="text" placeholder="(00) 00000-0000" oninput="maskTel(this)"/>
+        </div>
+        <div class="form-group">
+          <label>CR (livre)</label>
+          <input id="mc-cr" type="text" placeholder="Código/referência livre"/>
+        </div>
+        <div class="form-group">
+          <label>Recrutador (herdado)</label>
+          <input id="mc-rec" type="text" readonly/>
+        </div>
+        <div class="form-group">
+          <label>Status do Processo *</label>
+          <select id="mc-status">
+            <option value="">Selecione…</option>
+            <option value="APROVADO">Aprovado</option>
+            <option value="REPROVADO">Reprovado</option>
+            <option value="EM_ANALISE">Em Análise</option>
+            <option value="BANCO_TALENTOS">Banco de Talentos</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Antecedentes *</label>
+          <select id="mc-ant">
+            <option value="">Selecione…</option>
+            <option value="APROVADO">Aprovado</option>
+            <option value="REPROVADO">Reprovado</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Pesquisa de Ex-Colaborador *</label>
+          <select id="mc-recont">
+            <option value="">Selecione…</option>
+            <option value="NUNCA_TRABALHOU_NA_GPS">Nunca Trabalhou na GPS</option>
+            <option value="APROVADO">Aprovado</option>
+            <option value="REPROVADO">Reprovado</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1" id="mc-motivo-wrap">
+          <label>Motivo da Reprovação</label>
+          <input id="mc-motivo" type="text" placeholder="Descreva o motivo…"/>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Observações</label>
+          <textarea id="mc-obs" placeholder="Observações opcionais…"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cand')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCandidato()">Salvar Candidato</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECRUTADOR MODAL -->
+<div class="modal-overlay" id="modal-rec">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title" id="mr-title">Novo Recrutador</span>
+      <button class="modal-close" onclick="closeModal('modal-rec')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nome do Recrutador *</label>
+        <input id="mr-nome" type="text" placeholder="Nome completo"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-rec')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveRecrutador()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title">Confirmar Ação</span>
+      <button class="modal-close" onclick="closeModal('modal-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-msg" style="font-size:.9rem;color:var(--gray-700)"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-confirm')">Cancelar</button>
+      <button class="btn btn-danger" id="confirm-btn" onclick="">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CANDIDATO DETAIL MODAL -->
+<div class="modal-overlay" id="modal-cand-detail">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span class="modal-title">Detalhes do Candidato</span>
+      <button class="modal-close" onclick="closeModal('modal-cand-detail')">✕</button>
+    </div>
+    <div class="modal-body" id="cand-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cand-detail')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL: EVENTO CALENDÁRIO (NOVO) ═══════════════ -->
+<div class="modal-overlay" id="modal-event">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span class="modal-title" id="mev-title">Novo Evento</span>
+      <button class="modal-close" onclick="closeModal('modal-event')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Título do Evento *</label>
+          <input id="mev-titulo" type="text" placeholder="Ex: Feirão GPS – São Paulo"/>
+        </div>
+        <div class="form-group">
+          <label>Data de Início *</label>
+          <input id="mev-data-ini" type="date"/>
+        </div>
+        <div class="form-group">
+          <label>Data de Fim</label>
+          <input id="mev-data-fim" type="date"/>
+        </div>
+        <input id="mev-hora-ini" type="hidden" value=""/>
+        <input id="mev-hora-fim" type="hidden" value=""/>
+        <input id="mev-tipo" type="hidden" value="feirao"/>
+        <div class="form-group">
+          <label>Prioridade</label>
+          <select id="mev-prioridade">
+            <option value="normal">Normal</option>
+            <option value="alta">Alta</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Local / Link</label>
+          <input id="mev-local" type="text" placeholder="Endereço, sala ou link da reunião…"/>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Responsável</label>
+          <div class="autocomplete-wrap">
+            <input id="mev-resp-input" type="text" placeholder="Recrutador responsável…" autocomplete="off"
+              oninput="acRecrutadorEv('mev-resp-input','mev-resp-list','mev-resp-id')"
+              onfocus="acRecrutadorEv('mev-resp-input','mev-resp-list','mev-resp-id')"/>
+            <div class="autocomplete-list" id="mev-resp-list" style="display:none"></div>
+          </div>
+          <input id="mev-resp-id" type="hidden"/>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Feirão Vinculado (opcional)</label>
+          <select id="mev-feirao-link">
+            <option value="">Nenhum</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Descrição / Observações</label>
+          <textarea id="mev-desc" placeholder="Detalhes adicionais do evento…"></textarea>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="mev-recorrente" style="width:auto;border-radius:4px"/>
+            Evento recorrente (repetir semanalmente)
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="mev-delete-btn" onclick="deleteCurrentEvent()" style="display:none;margin-right:auto">Excluir</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-event')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEvent()">Salvar Evento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DIA DO CALENDÁRIO (eventos do dia) -->
+<div class="modal-overlay" id="modal-cal-day">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title" id="mcd-title">Eventos do dia</span>
+      <button class="modal-close" onclick="closeModal('modal-cal-day')">✕</button>
+    </div>
+    <div class="modal-body" id="mcd-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" id="mcd-add-btn">+ Novo Evento neste Dia</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-cal-day')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- OVERLAY CLOSE SIDEBAR ON MOBILE -->
+<div class="overlay-close" id="overlay-close" onclick="toggleSidebar()"></div>
+
+<script>
+// ═══════════════════════════════════════
+// STORAGE – Supabase (online, tempo real)
+// com fallback automático para localStorage
+// ═══════════════════════════════════════
+const DB = {
+  // ── Leitura síncrona via cache (alimentado pelo Realtime) ──
+  feiraos:      () => window._useLocalFallback ? (_LS.get('feiraos')      || []) : (window._cache.feiraos      || []),
+  candidatos:   () => window._useLocalFallback ? (_LS.get('candidatos')   || []) : (window._cache.candidatos   || []),
+  recrutadores: () => window._useLocalFallback ? (_LS.get('recrutadores') || []) : (window._cache.recrutadores || []),
+  eventos:      () => window._useLocalFallback ? (_LS.get('eventos')      || []) : (window._cache.eventos      || []),
+
+  // ── Gravação: salva no Supabase e espelha localmente ──
+  saveFeiraos: async (arr) => {
+    _LS.set('feiraos', arr);
+    if (!window._useLocalFallback && window._sbSaveBatch) {
+      window._cache.feiraos = arr;
+      await window._sbSaveBatch('feiraos', arr);
+    } else { window._cache.feiraos = arr; }
+  },
+  saveCandidatos: async (arr) => {
+    _LS.set('candidatos', arr);
+    if (!window._useLocalFallback && window._sbSaveBatch) {
+      window._cache.candidatos = arr;
+      await window._sbSaveBatch('candidatos', arr);
+    } else { window._cache.candidatos = arr; }
+  },
+  saveRecrutadores: async (arr) => {
+    _LS.set('recrutadores', arr);
+    if (!window._useLocalFallback && window._sbSaveBatch) {
+      window._cache.recrutadores = arr;
+      await window._sbSaveBatch('recrutadores', arr);
+    } else { window._cache.recrutadores = arr; }
+  },
+  saveEventos: async (arr) => {
+    _LS.set('eventos', arr);
+    if (!window._useLocalFallback && window._sbSaveBatch) {
+      window._cache.eventos = arr;
+      await window._sbSaveBatch('eventos', arr);
+    } else { window._cache.eventos = arr; }
+  },
+};
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+// ═══════════════════════════════════════
+// ZERAR TODOS OS DADOS
+// ═══════════════════════════════════════
+function confirmClearAllData() {
+  confirm_('⚠️ ATENÇÃO: Isso vai apagar TODOS os dados (feirões, candidatos, recrutadores e eventos) do banco online e local. Essa ação não pode ser desfeita. Deseja continuar?', async () => {
+    toast('Apagando dados…', 'info');
+    try {
+      await DB.saveFeiraos([]);
+      await DB.saveCandidatos([]);
+      await DB.saveRecrutadores([]);
+      await DB.saveEventos([]);
+      ['feiraos','candidatos','recrutadores','eventos'].forEach(k => localStorage.removeItem('gps_'+k));
+      toast('Todos os dados foram apagados! ✓', 'success');
+      populateFeiraoSelects();
+      renderDashboard();
+    } catch(e) {
+      console.error('Erro ao zerar dados:', e);
+      toast('Erro ao apagar: ' + e.message, 'error');
+    }
+  });
+}
+
+// Seed demo data if empty (only once, skipped if Supabase is connected)
+async function seedIfEmpty() {
+  // NUNCA faz seed automático se Supabase está ativo — evita sobrescrever dados reais
+  if (!window._useLocalFallback) return;
+  if (DB.feiraos().length) return;
+  const recs = [
+    {id:'r1', nome:'Ana Paula Silva'},
+    {id:'r2', nome:'Carlos Eduardo Santos'},
+    {id:'r3', nome:'Mariana Costa'},
+  ];
+  await DB.saveRecrutadores(recs);
+  const feiraos = [
+    {id:'f1', nomeFeirao:'Feirão GPS São Paulo – Junho 2024', dataEvento:'2024-06-10', localEvento:'São Paulo - SP', recrutadorId:'r1', recrutadorNome:'Ana Paula Silva', statusFeirao:'ENCERRADO', observacoes:'Evento realizado no Anhembi'},
+    {id:'f2', nomeFeirao:'Feirão GPS Campinas – Julho 2024', dataEvento:'2024-07-15', localEvento:'Campinas - SP', recrutadorId:'r2', recrutadorNome:'Carlos Eduardo Santos', statusFeirao:'ABERTO', observacoes:''},
+    {id:'f3', nomeFeirao:'Feirão GPS Rio de Janeiro – Agosto 2024', dataEvento:'2024-08-20', localEvento:'Rio de Janeiro - RJ', recrutadorId:'r3', recrutadorNome:'Mariana Costa', statusFeirao:'ABERTO', observacoes:''},
+  ];
+  await DB.saveFeiraos(feiraos);
+  const statuses = ['APROVADO','REPROVADO','EM_ANALISE','BANCO_TALENTOS'];
+  const ants = ['APROVADO','REPROVADO'];
+  const reconts = ['NUNCA_TRABALHOU_NA_GPS','APROVADO','REPROVADO'];
+  const motivos = ['Documentação incompleta','Reprovado em antecedentes','Perfil incompatível','Não compareceu','Desistência'];
+  const names = ['João Silva','Maria Santos','Pedro Lima','Carla Souza','Roberto Alves','Fernanda Costa','Lucas Pereira','Juliana Rocha','André Martins','Beatriz Nunes','Felipe Araújo','Gabriela Mendes','Ricardo Ferreira','Larissa Oliveira','Thiago Barbosa','Camila Rodrigues','Diego Carvalho','Natália Gomes','Rafael Ribeiro','Amanda Castro'];
+  const cands = [];
+  feiraos.forEach((f,fi) => {
+    for(let i=0;i<(fi===0?8:fi===1?6:4);i++){
+      const status = statuses[Math.floor(Math.random()*statuses.length)];
+      const ant = ants[Math.floor(Math.random()*ants.length)];
+      const recont = reconts[Math.floor(Math.random()*reconts.length)];
+      const c = {
+        id: uid(), feiraoId: f.id, feiraoNome: f.nomeFeirao, feiraoLocal: f.localEvento,
+        nome: names[(fi*8+i)%names.length] + ' ' + String.fromCharCode(65+i),
+        cpf: `${100+fi*10+i}.${200+i}.${300+fi}-${10+i}`,
+        telefone: `(11) 9${8000+i*7}-${1000+i*13}`,
+        cr: `CR-${fi+1}${String(i+1).padStart(2,'0')}`,
+        statusProcesso: status, antecedentes: ant, recontratacao: recont,
+        motivoReprovacao: (status==='REPROVADO'||ant==='REPROVADO') ? motivos[i%motivos.length] : '',
+        observacoes: '', recrutadorId: f.recrutadorId, recrutadorNome: f.recrutadorNome,
+        bancoTalentosFlag: false,
+      };
+      applyRuleEngine(c);
+      cands.push(c);
+    }
+  });
+  await DB.saveCandidatos(cands);
+
+  // Seed some calendar events
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const pad = n => String(n).padStart(2,'0');
+  const dateStr = (yr,mo,dy) => `${yr}-${pad(mo+1)}-${pad(dy)}`;
+  const seedEvents = [
+    {id:uid(), titulo:'Feirão GPS São Paulo', dataIni: dateStr(y,m,10), dataFim: dateStr(y,m,10), horaIni:'08:00', horaFim:'18:00', tipo:'feirao', prioridade:'alta', local:'Anhembi - SP', responsavel:'Ana Paula Silva', respId:'r1', feiraoLink:'f1', descricao:'Feirão principal do mês', recorrente:false},
+    {id:uid(), titulo:'Reunião de equipe', dataIni: dateStr(y,m,5), dataFim: dateStr(y,m,5), horaIni:'09:00', horaFim:'10:00', tipo:'reuniao', prioridade:'normal', local:'Sala 3', responsavel:'Carlos Eduardo Santos', respId:'r2', feiraoLink:'', descricao:'Alinhamento semanal', recorrente:true},
+    {id:uid(), titulo:'Prazo envio relatório', dataIni: dateStr(y,m,28), dataFim: dateStr(y,m,28), horaIni:'', horaFim:'', tipo:'prazo', prioridade:'alta', local:'', responsavel:'Mariana Costa', respId:'r3', feiraoLink:'', descricao:'Relatório mensal de candidatos', recorrente:false},
+    {id:uid(), titulo:'Entrevistas em grupo', dataIni: dateStr(y,m,15), dataFim: dateStr(y,m,15), horaIni:'14:00', horaFim:'17:00', tipo:'entrevista', prioridade:'normal', local:'Campinas - SP', responsavel:'Carlos Eduardo Santos', respId:'r2', feiraoLink:'f2', descricao:'', recorrente:false},
+    {id:uid(), titulo:'Feirão GPS Rio', dataIni: dateStr(y,m+1,3), dataFim: dateStr(y,m+1,3), horaIni:'08:00', horaFim:'18:00', tipo:'feirao', prioridade:'alta', local:'Rio de Janeiro - RJ', responsavel:'Mariana Costa', respId:'r3', feiraoLink:'f3', descricao:'', recorrente:false},
+  ];
+  await DB.saveEventos(seedEvents);
+}
+
+// ═══════════════════════════════════════
+// RULE ENGINE
+// ═══════════════════════════════════════
+function applyRuleEngine(c) {
+  if (c.antecedentes === 'REPROVADO') c.statusProcesso = 'REPROVADO';
+  c.bancoTalentosFlag = c.statusProcesso === 'BANCO_TALENTOS';
+}
+
+// ═══════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════
+const pageNames = {
+  dashboard: 'Início', feiraos: 'Feirões de Emprego', candidatos: 'Candidatos',
+  talentos: 'Banco de Talentos', calendario: 'Calendário', analytics: 'Analytics',
+  importar: 'Importar Excel', recrutadores: 'Recrutadores',
+};
+let currentPage = 'dashboard';
+function navigate(page) {
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page===page));
+  document.getElementById('topbar-title').textContent = pageNames[page]||page;
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay-close').classList.remove('open');
+  refreshPage(page);
+}
+
+function refreshPage(page) {
+  if(page==='dashboard') renderDashboard();
+  if(page==='feiraos') renderFeiraos();
+  if(page==='candidatos') { populateFeiraoSelects(); renderCandidatos(); }
+  if(page==='talentos') { populateFeiraoSelects(); renderTalentos(); }
+  if(page==='calendario') { populateFeiraoSelects(); renderCalendar(); }
+  if(page==='analytics') { populateFeiraoSelects(); renderAnalytics(); }
+  if(page==='importar') populateFeiraoSelects();
+  if(page==='recrutadores') renderRecrutadores();
+}
+
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  const oc = document.getElementById('overlay-close');
+  s.classList.toggle('open');
+  oc.classList.toggle('open', s.classList.contains('open'));
+}
+
+// ═══════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════
+function toast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.innerHTML = (type==='success'?'✓ ':type==='error'?'✗ ':'ℹ ') + msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(()=>t.remove(), 3500);
+}
+
+// ═══════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function confirm_(msg, fn) {
+  document.getElementById('confirm-msg').textContent = msg;
+  const btn = document.getElementById('confirm-btn');
+  btn.onclick = () => { fn(); closeModal('modal-confirm'); };
+  openModal('modal-confirm');
+}
+
+// ═══════════════════════════════════════
+// POPULATE SELECTS
+// ═══════════════════════════════════════
+function populateFeiraoSelects() {
+  const feiraos = DB.feiraos();
+  const ids = ['f-feirao-cand','f-bt-feirao','an-feirao','imp-feirao','mc-feirao','mev-feirao-link'];
+  ids.forEach(id => {
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const val = sel.value;
+    const first = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(first);
+    feiraos.forEach(f => {
+      const o = document.createElement('option');
+      o.value = f.id; o.textContent = f.nomeFeirao;
+      sel.appendChild(o);
+    });
+    if(val) sel.value = val;
+  });
+}
+
+// ═══════════════════════════════════════
+// AUTOCOMPLETE RECRUTADOR
+// ═══════════════════════════════════════
+function acRecrutador(inputId, listId, hiddenId) {
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  const hidden = document.getElementById(hiddenId);
+  const q = normStr(input.value);
+  const recs = DB.recrutadores().filter(r => !q || normStr(r.nome).includes(q));
+  if(!recs.length && !q) { list.style.display='none'; return; }
+  list.innerHTML = '';
+  const showing = [...recs];
+  if(input.value.trim() && !recs.find(r=>normStr(r.nome)===q)){
+    const d = document.createElement('div');
+    d.innerHTML = `<em style="color:var(--blue-600)">+ Criar: "${input.value.trim()}"</em>`;
+    d.onclick = () => {
+      const newR = {id:uid(), nome:input.value.trim()};
+      const all = DB.recrutadores(); all.push(newR); DB.saveRecrutadores(all).then(()=>{});
+      input.value = newR.nome; hidden.value = newR.id;
+      list.style.display='none';
+      toast('Recrutador criado!','success');
+    };
+    list.appendChild(d);
+  }
+  showing.forEach(r => {
+    const d = document.createElement('div');
+    d.textContent = r.nome;
+    d.onclick = () => { input.value = r.nome; hidden.value = r.id; list.style.display='none'; };
+    list.appendChild(d);
+  });
+  list.style.display = list.children.length ? 'block' : 'none';
+}
+
+function acRecrutadorEv(inputId, listId, hiddenId) {
+  acRecrutador(inputId, listId, hiddenId);
+}
+
+document.addEventListener('click', e => {
+  document.querySelectorAll('.autocomplete-list').forEach(l => {
+    if(!l.parentElement.contains(e.target)) l.style.display='none';
+  });
+  if(!document.getElementById('global-search-wrap').contains(e.target)){
+    document.getElementById('search-results-dropdown').style.display='none';
+  }
+});
+
+function normStr(s='') { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+
+// ═══════════════════════════════════════
+// FEIRÕES CRUD
+// ═══════════════════════════════════════
+let editFeiraId = null;
+function openFeiraModal(id=null) {
+  editFeiraId = id;
+  document.getElementById('mf-title').textContent = id ? 'Editar Feirão' : 'Novo Feirão';
+  if(id) {
+    const f = DB.feiraos().find(x=>x.id===id);
+    document.getElementById('mf-nome').value = f.nomeFeirao;
+    document.getElementById('mf-data').value = f.dataEvento;
+    document.getElementById('mf-local').value = f.localEvento;
+    document.getElementById('mf-rec-input').value = f.recrutadorNome;
+    document.getElementById('mf-rec-id').value = f.recrutadorId;
+    document.getElementById('mf-status').value = f.statusFeirao;
+    document.getElementById('mf-obs').value = f.observacoes||'';
+  } else {
+    document.getElementById('mf-nome').value='';
+    document.getElementById('mf-data').value='';
+    document.getElementById('mf-local').value='';
+    document.getElementById('mf-rec-input').value='';
+    document.getElementById('mf-rec-id').value='';
+    document.getElementById('mf-status').value='ABERTO';
+    document.getElementById('mf-obs').value='';
+  }
+  document.getElementById('mf-rec-list').style.display='none';
+  openModal('modal-feirao');
+}
+
+async function saveFeirao() {
+  const nome = document.getElementById('mf-nome').value.trim();
+  const data = document.getElementById('mf-data').value;
+  const local = document.getElementById('mf-local').value.trim();
+  const recId = document.getElementById('mf-rec-id').value;
+  const recNome = document.getElementById('mf-rec-input').value.trim();
+  const status = document.getElementById('mf-status').value;
+  const obs = document.getElementById('mf-obs').value.trim();
+  if(!nome){toast('Nome é obrigatório','error');return;}
+  if(!local){toast('Local/Cidade é obrigatório','error');return;}
+  if(!recId||!recNome){toast('Recrutador é obrigatório','error');return;}
+  let all = DB.feiraos();
+  if(editFeiraId) {
+    const idx = all.findIndex(x=>x.id===editFeiraId);
+    const old = all[idx];
+    all[idx] = {...old, nomeFeirao:nome, dataEvento:data, localEvento:local, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs};
+    if(old.recrutadorId !== recId || old.recrutadorNome !== recNome) {
+      let cands = DB.candidatos();
+      cands = cands.map(c => c.feiraoId===editFeiraId ? {...c, recrutadorId:recId, recrutadorNome:recNome} : c);
+      await DB.saveCandidatos(cands);
+    }
+    let cands = DB.candidatos();
+    cands = cands.map(c => c.feiraoId===editFeiraId ? {...c, feiraoNome:nome, feiraoLocal:local} : c);
+    await DB.saveCandidatos(cands);
+    // SYNC: Atualiza evento do calendário vinculado a este feirão
+    if(data) {
+      let eventos = DB.eventos();
+      const evIdx = eventos.findIndex(e => e.feiraoLink === editFeiraId);
+      if(evIdx !== -1) {
+        eventos[evIdx] = {...eventos[evIdx], titulo:nome, dataIni:data, dataFim:data, local, responsavel:recNome, respId:recId};
+        await DB.saveEventos(eventos);
+      }
+    }
+    toast('Feirão atualizado!','success');
+  } else {
+    const newId = uid();
+    const novoFeirao = {id:newId, nomeFeirao:nome, dataEvento:data, localEvento:local, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs};
+    all.push(novoFeirao);
+    // SYNC: Cria evento no Calendário automaticamente ao criar Feirão
+    if(data) {
+      const evId = uid();
+      let eventos = DB.eventos();
+      eventos.push({
+        id:evId, titulo:nome, dataIni:data, dataFim:data,
+        horaIni:'08:00', horaFim:'18:00', tipo:'feirao',
+        prioridade:'alta', local, responsavel:recNome,
+        respId:recId, feiraoLink:newId,
+        descricao: obs || 'Feirão criado automaticamente via módulo Feirões',
+        recorrente:false,
+      });
+      await DB.saveEventos(eventos);
+      toast('Feirão criado e evento adicionado ao Calendário! 🗓️','success');
+    } else {
+      toast('Feirão criado!','success');
+    }
+  }
+  await DB.saveFeiraos(all);
+  closeModal('modal-feirao');
+  renderFeiraos();
+}
+
+function deleteFeirao(id) {
+  confirm_('Tem certeza que deseja excluir este feirão e todos os seus candidatos?', async () => {
+    await DB.saveFeiraos(DB.feiraos().filter(x=>x.id!==id));
+    await DB.saveCandidatos(DB.candidatos().filter(x=>x.feiraoId!==id));
+    // Remove também o evento do calendário vinculado
+    await DB.saveEventos(DB.eventos().filter(e=>e.feiraoLink!==id));
+    toast('Feirão excluído!','success');
+    renderFeiraos();
+  });
+}
+
+async function toggleFeirao(id) {
+  let all = DB.feiraos();
+  const idx = all.findIndex(x=>x.id===id);
+  all[idx].statusFeirao = all[idx].statusFeirao==='ABERTO' ? 'ENCERRADO' : 'ABERTO';
+  await DB.saveFeiraos(all);
+  toast(`Feirão ${all[idx].statusFeirao==='ABERTO'?'reaberto':'encerrado'}!`,'success');
+  renderFeiraos();
+}
+
+function renderFeiraos() {
+  const feiraos = DB.feiraos();
+  const cands = DB.candidatos();
+  const q = normStr(document.getElementById('f-search-feirao')?.value||'');
+  const qr = normStr(document.getElementById('f-search-recrutador')?.value||'');
+  const qc = normStr(document.getElementById('f-search-cidade')?.value||'');
+  const qs = document.getElementById('f-status-feirao')?.value||'';
+  let list = feiraos.filter(f =>
+    (!q || normStr(f.nomeFeirao).includes(q)) &&
+    (!qr || normStr(f.recrutadorNome).includes(qr)) &&
+    (!qc || normStr(f.localEvento).includes(qc)) &&
+    (!qs || f.statusFeirao===qs)
+  );
+  document.getElementById('feiraos-count-label').textContent = `${list.length} feirão(ões) encontrado(s)`;
+  const tbody = document.getElementById('feiraos-tbody');
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="7" class="no-data">Nenhum feirão encontrado</td></tr>`;return;}
+  tbody.innerHTML = list.map(f => {
+    const count = cands.filter(c=>c.feiraoId===f.id).length;
+    const badge = f.statusFeirao==='ABERTO' ? '<span class="badge badge-green">Aberto</span>' : '<span class="badge badge-gray">Encerrado</span>';
+    return `<tr>
+      <td><strong>${esc(f.nomeFeirao)}</strong></td>
+      <td>${f.dataEvento ? fmt(f.dataEvento) : '—'}</td>
+      <td>${esc(f.localEvento)}</td>
+      <td>${esc(f.recrutadorNome)}</td>
+      <td>${badge}</td>
+      <td><span class="badge badge-blue">${count}</span></td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="navigate('candidatos');document.getElementById('f-feirao-cand').value='${f.id}';renderCandidatos()">Ver</button>
+          <button class="btn btn-secondary btn-sm" onclick="openFeiraModal('${f.id}')">Editar</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleFeirao('${f.id}')">${f.statusFeirao==='ABERTO'?'Encerrar':'Reabrir'}</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteFeirao('${f.id}')">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function clearFeiraFilters() {
+  ['f-search-feirao','f-search-recrutador','f-search-cidade'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-status-feirao').value='';
+  renderFeiraos();
+}
+
+// ═══════════════════════════════════════
+// CANDIDATOS CRUD
+// ═══════════════════════════════════════
+let editCandId = null;
+function openCandModal(id=null) {
+  editCandId = id;
+  populateFeiraoSelects();
+  document.getElementById('mc-title').textContent = id ? 'Editar Candidato' : 'Novo Candidato';
+  if(id) {
+    const c = DB.candidatos().find(x=>x.id===id);
+    document.getElementById('mc-feirao').value = c.feiraoId;
+    document.getElementById('mc-nome').value = c.nome;
+    document.getElementById('mc-cpf').value = c.cpf;
+    document.getElementById('mc-tel').value = c.telefone||'';
+    document.getElementById('mc-cr').value = c.cr||'';
+    document.getElementById('mc-rec').value = c.recrutadorNome;
+    document.getElementById('mc-status').value = c.statusProcesso;
+    document.getElementById('mc-ant').value = c.antecedentes;
+    document.getElementById('mc-recont').value = c.recontratacao;
+    document.getElementById('mc-motivo').value = c.motivoReprovacao||'';
+    document.getElementById('mc-obs').value = c.observacoes||'';
+  } else {
+    ['mc-feirao','mc-status','mc-ant','mc-recont'].forEach(id=>document.getElementById(id).value='');
+    ['mc-nome','mc-cpf','mc-tel','mc-cr','mc-rec','mc-motivo','mc-obs'].forEach(id=>document.getElementById(id).value='');
+  }
+  toggleMotivoField();
+  openModal('modal-cand');
+}
+
+function onFeiraoCandChange() {
+  const fid = document.getElementById('mc-feirao').value;
+  if(!fid){document.getElementById('mc-rec').value='';return;}
+  const f = DB.feiraos().find(x=>x.id===fid);
+  if(f) document.getElementById('mc-rec').value = f.recrutadorNome;
+}
+
+function toggleMotivoField() {
+  const status = document.getElementById('mc-status').value;
+  const ant = document.getElementById('mc-ant').value;
+  const wrap = document.getElementById('mc-motivo-wrap');
+  wrap.style.display = (status==='REPROVADO'||ant==='REPROVADO') ? 'flex' : 'none';
+}
+document.getElementById('mc-status').addEventListener('change', toggleMotivoField);
+document.getElementById('mc-ant').addEventListener('change', toggleMotivoField);
+
+async function saveCandidato() {
+  const fid = document.getElementById('mc-feirao').value;
+  const nome = document.getElementById('mc-nome').value.trim();
+  const cpf = document.getElementById('mc-cpf').value.trim();
+  const tel = document.getElementById('mc-tel').value.trim();
+  const cr = document.getElementById('mc-cr').value.trim();
+  let status = document.getElementById('mc-status').value;
+  let ant = document.getElementById('mc-ant').value;
+  const recont = document.getElementById('mc-recont').value;
+  const motivo = document.getElementById('mc-motivo').value.trim();
+  const obs = document.getElementById('mc-obs').value.trim();
+  if(!fid){toast('Selecione um feirão','error');return;}
+  if(!nome){toast('Nome é obrigatório','error');return;}
+  if(!cpf){toast('CPF é obrigatório','error');return;}
+  if(!status){toast('Status do processo é obrigatório','error');return;}
+  if(!ant){toast('Antecedentes é obrigatório','error');return;}
+  if(!recont){toast('Pesquisa de Ex-Colaborador é obrigatória','error');return;}
+  const f = DB.feiraos().find(x=>x.id===fid);
+  if(!f){toast('Feirão não encontrado','error');return;}
+  let cands = DB.candidatos();
+  const dupCPF = cands.find(c=>normStr(c.cpf)===normStr(cpf) && c.id!==editCandId);
+  if(dupCPF){toast('CPF já cadastrado em outro candidato!','error');return;}
+  const c = {
+    id: editCandId||uid(), feiraoId: fid, feiraoNome: f.nomeFeirao, feiraoLocal: f.localEvento,
+    nome, cpf, telefone:tel, cr, statusProcesso:status, antecedentes:ant,
+    recontratacao:recont, motivoReprovacao:motivo, observacoes:obs,
+    recrutadorId: f.recrutadorId, recrutadorNome: f.recrutadorNome, bancoTalentosFlag: false,
+  };
+  applyRuleEngine(c);
+  if(editCandId) {
+    const idx = cands.findIndex(x=>x.id===editCandId);
+    cands[idx] = c;
+  } else {
+    cands.push(c);
+  }
+  await DB.saveCandidatos(cands);
+  closeModal('modal-cand');
+  toast(editCandId?'Candidato atualizado!':'Candidato salvo!','success');
+  renderCandidatos();
+}
+
+function deleteCandidato(id) {
+  confirm_('Excluir este candidato?', async () => {
+    await DB.saveCandidatos(DB.candidatos().filter(c=>c.id!==id));
+    toast('Candidato excluído!','success');
+    renderCandidatos();
+  });
+}
+
+function viewCandidato(id) {
+  const c = DB.candidatos().find(x=>x.id===id);
+  if(!c) return;
+  const bt = c.bancoTalentosFlag ? '<span class="tag-bt">⭐ Banco de Talentos</span>' : '';
+  document.getElementById('cand-detail-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><span class="text-muted text-sm">Nome</span><p style="font-weight:700;margin-top:2px">${esc(c.nome)} ${bt}</p></div>
+      <div><span class="text-muted text-sm">CPF</span><p style="font-weight:600;margin-top:2px">${esc(c.cpf)}</p></div>
+      <div><span class="text-muted text-sm">Telefone</span><p style="margin-top:2px">${esc(c.telefone)||'—'}</p></div>
+      <div><span class="text-muted text-sm">CR</span><p style="margin-top:2px">${esc(c.cr)||'—'}</p></div>
+      <div><span class="text-muted text-sm">Feirão</span><p style="margin-top:2px">${esc(c.feiraoNome)}</p></div>
+      <div><span class="text-muted text-sm">Recrutador</span><p style="margin-top:2px">${esc(c.recrutadorNome)}</p></div>
+      <div><span class="text-muted text-sm">Status</span><p style="margin-top:2px">${statusBadge(c.statusProcesso)}</p></div>
+      <div><span class="text-muted text-sm">Antecedentes</span><p style="margin-top:2px">${antBadge(c.antecedentes)}</p></div>
+      <div><span class="text-muted text-sm">Recontratação</span><p style="margin-top:2px">${reconBadge(c.recontratacao)}</p></div>
+      <div><span class="text-muted text-sm">Motivo Reprovação</span><p style="margin-top:2px">${esc(c.motivoReprovacao)||'—'}</p></div>
+      <div style="grid-column:1/-1"><span class="text-muted text-sm">Observações</span><p style="margin-top:2px">${esc(c.observacoes)||'—'}</p></div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" onclick="closeModal('modal-cand-detail');openCandModal('${c.id}')">Editar</button>
+      <button class="btn btn-danger btn-sm" onclick="closeModal('modal-cand-detail');deleteCandidato('${c.id}')">Excluir</button>
+    </div>
+  `;
+  openModal('modal-cand-detail');
+}
+
+function getFilteredCandidatos() {
+  let cands = DB.candidatos();
+  const fid = document.getElementById('f-feirao-cand')?.value||'';
+  const q = normStr(document.getElementById('f-nome-cand')?.value||'');
+  const qr = normStr(document.getElementById('f-rec-cand')?.value||'');
+  const qs = document.getElementById('f-status-cand')?.value||'';
+  const qa = document.getElementById('f-ant-cand')?.value||'';
+  const qbt = document.getElementById('f-bt-cand')?.value||'';
+  return cands.filter(c =>
+    (!fid || c.feiraoId===fid) &&
+    (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)||normStr(c.cr).includes(q)) &&
+    (!qr || normStr(c.recrutadorNome).includes(qr)) &&
+    (!qs || c.statusProcesso===qs) &&
+    (!qa || c.antecedentes===qa) &&
+    (!qbt || (qbt==='1'? c.bancoTalentosFlag : !c.bancoTalentosFlag))
+  );
+}
+
+function renderCandidatos() {
+  const list = getFilteredCandidatos();
+  document.getElementById('cand-count-label').textContent = `${list.length} candidato(s) encontrado(s)`;
+  const tbody = document.getElementById('candidatos-tbody');
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="10" class="no-data">Nenhum candidato encontrado</td></tr>`;return;}
+  tbody.innerHTML = list.map(c => `<tr>
+    <td><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')">${esc(c.nome)}</strong>${c.bancoTalentosFlag?'<span class="tag-bt" style="margin-left:5px">BT</span>':''}</td>
+    <td>${esc(c.cpf)}</td>
+    <td>${esc(c.cr)||'—'}</td>
+    <td title="${esc(c.feiraoNome)}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.feiraoNome)}</td>
+    <td>${esc(c.recrutadorNome)}</td>
+    <td>${statusBadge(c.statusProcesso)}</td>
+    <td>${antBadge(c.antecedentes)}</td>
+    <td>${reconBadge(c.recontratacao)}</td>
+    <td>${c.bancoTalentosFlag?'<span class="badge badge-purple">Sim</span>':'<span class="badge badge-gray">Não</span>'}</td>
+    <td>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-secondary btn-sm" onclick="openCandModal('${c.id}')">✏</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCandidato('${c.id}')">✕</button>
+      </div>
+    </td>
+  </tr>`).join('');
+}
+
+function clearCandFilters() {
+  ['f-nome-cand','f-rec-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-feirao-cand','f-status-cand','f-ant-cand','f-bt-cand'].forEach(id=>document.getElementById(id).value='');
+  renderCandidatos();
+}
+
+// ═══════════════════════════════════════
+// BANCO DE TALENTOS
+// ═══════════════════════════════════════
+function renderTalentos() {
+  const cands = DB.candidatos().filter(c=>c.bancoTalentosFlag);
+  const q = normStr(document.getElementById('f-bt-nome')?.value||'');
+  const fid = document.getElementById('f-bt-feirao')?.value||'';
+  const qc = normStr(document.getElementById('f-bt-cidade')?.value||'');
+  const qr = normStr(document.getElementById('f-bt-rec')?.value||'');
+  const qcr = normStr(document.getElementById('f-bt-cr')?.value||'');
+  let list = cands.filter(c =>
+    (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)||normStr(c.cr).includes(q)) &&
+    (!fid || c.feiraoId===fid) &&
+    (!qc || normStr(c.feiraoLocal||'').includes(qc)) &&
+    (!qr || normStr(c.recrutadorNome).includes(qr)) &&
+    (!qcr || normStr(c.cr||'').includes(qcr))
+  );
+  document.getElementById('bt-count-label').textContent = `${list.length} talento(s) no banco global`;
+  const tbody = document.getElementById('talentos-tbody');
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="8" class="no-data">Nenhum talento encontrado</td></tr>`;return;}
+  tbody.innerHTML = list.map(c=>`<tr>
+    <td><strong style="color:var(--blue-700);cursor:pointer" onclick="viewCandidato('${c.id}')">${esc(c.nome)}</strong></td>
+    <td>${esc(c.cpf)}</td>
+    <td>${esc(c.cr)||'—'}</td>
+    <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.feiraoNome)}</td>
+    <td>${esc(c.feiraoLocal||'')}</td>
+    <td>${esc(c.recrutadorNome)}</td>
+    <td>${reconBadge(c.recontratacao)}</td>
+    <td><button class="btn btn-secondary btn-sm" onclick="openCandModal('${c.id}')">Editar</button></td>
+  </tr>`).join('');
+}
+
+function clearBTFilters() {
+  ['f-bt-nome','f-bt-cidade','f-bt-rec','f-bt-cr'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-bt-feirao').value='';
+  renderTalentos();
+}
+
+// ═══════════════════════════════════════
+// RECRUTADORES CRUD
+// ═══════════════════════════════════════
+let editRecId = null;
+function openRecModal(id=null) {
+  editRecId = id;
+  document.getElementById('mr-title').textContent = id ? 'Editar Recrutador' : 'Novo Recrutador';
+  document.getElementById('mr-nome').value = id ? (DB.recrutadores().find(x=>x.id===id)||{}).nome||'' : '';
+  openModal('modal-rec');
+}
+
+async function saveRecrutador() {
+  const nome = document.getElementById('mr-nome').value.trim();
+  if(!nome){toast('Nome é obrigatório','error');return;}
+  let all = DB.recrutadores();
+  const dup = all.find(r=>normStr(r.nome)===normStr(nome) && r.id!==editRecId);
+  if(dup){toast('Recrutador já cadastrado!','error');return;}
+  if(editRecId) {
+    const idx = all.findIndex(x=>x.id===editRecId);
+    const old = all[idx];
+    all[idx] = {...old, nome};
+    let feiraos = DB.feiraos();
+    feiraos = feiraos.map(f=>f.recrutadorId===editRecId?{...f,recrutadorNome:nome}:f);
+    await DB.saveFeiraos(feiraos);
+    let cands = DB.candidatos();
+    cands = cands.map(c=>c.recrutadorId===editRecId?{...c,recrutadorNome:nome}:c);
+    await DB.saveCandidatos(cands);
+    toast('Recrutador atualizado!','success');
+  } else {
+    all.push({id:uid(), nome});
+    toast('Recrutador criado!','success');
+  }
+  await DB.saveRecrutadores(all);
+  closeModal('modal-rec');
+  renderRecrutadores();
+}
+
+function deleteRecrutador(id) {
+  const inUse = DB.feiraos().find(f=>f.recrutadorId===id);
+  if(inUse){toast('Recrutador em uso em um feirão, não pode ser excluído!','error');return;}
+  confirm_('Excluir este recrutador?', async ()=>{
+    await DB.saveRecrutadores(DB.recrutadores().filter(r=>r.id!==id));
+    toast('Recrutador excluído!','success');
+    renderRecrutadores();
+  });
+}
+
+function renderRecrutadores() {
+  const recs = DB.recrutadores();
+  const q = normStr(document.getElementById('f-rec-nome')?.value||'');
+  const cands = DB.candidatos();
+  const feiraos = DB.feiraos();
+  let list = recs.filter(r=>!q||normStr(r.nome).includes(q));
+  document.getElementById('rec-count-label').textContent = `${list.length} recrutador(es)`;
+  const tbody = document.getElementById('rec-tbody');
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="6" class="no-data">Nenhum recrutador</td></tr>`;return;}
+  tbody.innerHTML = list.map(r=>{
+    const rc = cands.filter(c=>c.recrutadorId===r.id);
+    const rf = feiraos.filter(f=>f.recrutadorId===r.id).length;
+    const aprov = rc.filter(c=>c.statusProcesso==='APROVADO').length;
+    const taxa = rc.length ? Math.round(aprov/rc.length*100) : 0;
+    return `<tr>
+      <td><strong>${esc(r.nome)}</strong></td>
+      <td><span class="badge badge-blue">${rf}</span></td>
+      <td>${rc.length}</td>
+      <td>${aprov}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:${taxa}%;background:var(--green)"></div></div>
+          <span style="font-size:.8rem;font-weight:600">${taxa}%</span>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-secondary btn-sm" onclick="openRecModal('${r.id}')">✏</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRecrutador('${r.id}')">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════
+let dashCharts = {};
+function renderDashboard() {
+  const cands = DB.candidatos();
+  const feiraos = DB.feiraos();
+  const bt = cands.filter(c=>c.bancoTalentosFlag).length;
+  const aprov = cands.filter(c=>c.statusProcesso==='APROVADO').length;
+  const reprov = cands.filter(c=>c.statusProcesso==='REPROVADO').length;
+  const analise = cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const taxa = cands.length ? Math.round(aprov/cands.length*100) : 0;
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Candidatos</div><div class="stat-value">${cands.length}</div><div class="stat-sub">${feiraos.length} feirão(ões)</div></div>
+    <div class="stat-card green"><div class="stat-label">Aprovados</div><div class="stat-value">${aprov}</div><div class="stat-sub">Taxa: ${taxa}%</div></div>
+    <div class="stat-card red"><div class="stat-label">Reprovados</div><div class="stat-value">${reprov}</div><div class="stat-sub">${cands.length?Math.round(reprov/cands.length*100):0}% do total</div></div>
+    <div class="stat-card yellow"><div class="stat-label">Em Análise</div><div class="stat-value">${analise}</div><div class="stat-sub"></div></div>
+    <div class="stat-card purple"><div class="stat-label">Banco Talentos</div><div class="stat-value">${bt}</div><div class="stat-sub">Talentos globais</div></div>
+    <div class="stat-card"><div class="stat-label">Feirões Abertos</div><div class="stat-value">${feiraos.filter(f=>f.statusFeirao==='ABERTO').length}</div><div class="stat-sub">de ${feiraos.length} total</div></div>
+  `;
+  renderDonut('chartStatusDash', dashCharts, 'chartStatusDash', ['Aprovado','Reprovado','Em Análise','Banco Talentos'], [aprov,reprov,analise,bt], ['#16a34a','#dc2626','#ca8a04','#7c3aed']);
+  const byF = feiraos.slice(0,8).map(f=>({label:f.nomeFeirao.substring(0,20)+'…', val:cands.filter(c=>c.feiraoId===f.id).length}));
+  renderBar('chartFeiraoDash', dashCharts, 'chartFeiraoDash', byF.map(x=>x.label), byF.map(x=>x.val), 'var(--blue-500)');
+  const antA = cands.filter(c=>c.antecedentes==='APROVADO').length;
+  const antR = cands.filter(c=>c.antecedentes==='REPROVADO').length;
+  renderDonut('chartAntDash', dashCharts, 'chartAntDash', ['Aprovado','Reprovado'],[antA,antR],['#16a34a','#dc2626']);
+  const rNev = cands.filter(c=>c.recontratacao==='NUNCA_TRABALHOU_NA_GPS').length;
+  const rAp = cands.filter(c=>c.recontratacao==='APROVADO').length;
+  const rRp = cands.filter(c=>c.recontratacao==='REPROVADO').length;
+  renderDonut('chartRecontDash', dashCharts, 'chartRecontDash', ['Nunca GPS','Aprovado','Reprovado'],[rNev,rAp,rRp],['#3b82f6','#16a34a','#dc2626']);
+  const sorted = [...feiraos].sort((a,b)=>b.dataEvento?.localeCompare(a.dataEvento)||0).slice(0,5);
+  document.getElementById('dash-recent-feiraos').innerHTML = sorted.length ? sorted.map(f=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <div><p style="font-weight:600;font-size:.85rem">${esc(f.nomeFeirao)}</p><p class="text-muted text-sm">${esc(f.localEvento)} · ${f.dataEvento?fmt(f.dataEvento):'—'}</p></div>
+      ${f.statusFeirao==='ABERTO'?'<span class="badge badge-green">Aberto</span>':'<span class="badge badge-gray">Encerrado</span>'}
+    </div>`).join('') : '<p class="text-muted text-sm">Nenhum feirão cadastrado</p>';
+  const motCounts = {};
+  cands.forEach(c=>{if(c.motivoReprovacao){const k=c.motivoReprovacao.trim();motCounts[k]=(motCounts[k]||0)+1;}});
+  const motList = Object.entries(motCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxM = motList[0]?.[1]||1;
+  document.getElementById('dash-motivos').innerHTML = motList.length ? motList.map(([m,n])=>`
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:.82rem;font-weight:600">${esc(m)}</span><span class="badge badge-red">${n}</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(n/maxM*100)}%;background:var(--red)"></div></div>
+    </div>`).join('') : '<p class="text-muted text-sm">Nenhum motivo registrado</p>';
+}
+
+// ═══════════════════════════════════════
+// ANALYTICS
+// ═══════════════════════════════════════
+let anCharts = {};
+function renderAnalytics() {
+  let cands = DB.candidatos();
+  const feiraos = DB.feiraos();
+  const fid = document.getElementById('an-feirao')?.value||'';
+  const qc = normStr(document.getElementById('an-cidade')?.value||'');
+  const qr = normStr(document.getElementById('an-rec')?.value||'');
+  const qbt = document.getElementById('an-bt')?.value||'';
+  cands = cands.filter(c=>(!fid||c.feiraoId===fid)&&(!qc||normStr(c.feiraoLocal||'').includes(qc))&&(!qr||normStr(c.recrutadorNome).includes(qr))&&(!qbt||c.bancoTalentosFlag));
+  const total=cands.length, aprov=cands.filter(c=>c.statusProcesso==='APROVADO').length;
+  const reprov=cands.filter(c=>c.statusProcesso==='REPROVADO').length;
+  const analise=cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const bt=cands.filter(c=>c.bancoTalentosFlag).length;
+  const taxa=total?Math.round(aprov/total*100):0;
+  document.getElementById('an-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">${total}</div></div>
+    <div class="stat-card green"><div class="stat-label">Aprovados</div><div class="stat-value">${aprov}</div><div class="stat-sub">${taxa}%</div></div>
+    <div class="stat-card red"><div class="stat-label">Reprovados</div><div class="stat-value">${reprov}</div><div class="stat-sub">${total?Math.round(reprov/total*100):0}%</div></div>
+    <div class="stat-card yellow"><div class="stat-label">Em Análise</div><div class="stat-value">${analise}</div></div>
+    <div class="stat-card purple"><div class="stat-label">Banco Talentos</div><div class="stat-value">${bt}</div></div>
+  `;
+  renderDonut('chartAnStatus',anCharts,'chartAnStatus',['Aprovado','Reprovado','Em Análise','BT'],[aprov,reprov,analise,bt],['#16a34a','#dc2626','#ca8a04','#7c3aed']);
+  const antA=cands.filter(c=>c.antecedentes==='APROVADO').length, antR=cands.filter(c=>c.antecedentes==='REPROVADO').length;
+  renderDonut('chartAnAnt',anCharts,'chartAnAnt',['Aprovado','Reprovado'],[antA,antR],['#16a34a','#dc2626']);
+  const byF=feiraos.map(f=>({l:f.nomeFeirao.substring(0,18),v:cands.filter(c=>c.feiraoId===f.id).length})).filter(x=>x.v>0).slice(0,10);
+  renderBar('chartAnFeirao',anCharts,'chartAnFeirao',byF.map(x=>x.l),byF.map(x=>x.v),'var(--blue-500)');
+  const crMap={};
+  cands.forEach(c=>{if(c.cr){const k=c.cr.trim();crMap[k]=(crMap[k]||0)+1;}});
+  const crList=Object.entries(crMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  renderBar('chartAnCR',anCharts,'chartAnCR',crList.map(x=>x[0]),crList.map(x=>x[1]),'var(--purple)');
+  const motCounts={};
+  cands.forEach(c=>{if(c.motivoReprovacao){const k=c.motivoReprovacao.trim();motCounts[k]=(motCounts[k]||0)+1;}});
+  const motList=Object.entries(motCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxM=motList[0]?.[1]||1;
+  document.getElementById('an-motivos-list').innerHTML=motList.length?motList.map(([m,n])=>`
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:.82rem">${esc(m)}</span><span class="badge badge-red">${n}</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(n/maxM*100)}%;background:var(--red)"></div></div>
+    </div>`).join(''):'<p class="text-muted text-sm">Nenhum motivo registrado</p>';
+  const recCounts={};
+  cands.forEach(c=>{const k=c.recrutadorNome;recCounts[k]=(recCounts[k]||{total:0,aprov:0});recCounts[k].total++;if(c.statusProcesso==='APROVADO')recCounts[k].aprov++;});
+  const recList=Object.entries(recCounts).sort((a,b)=>b[1].total-a[1].total).slice(0,8);
+  const maxR=recList[0]?.[1]?.total||1;
+  document.getElementById('an-rec-list').innerHTML=recList.length?recList.map(([r,d])=>`
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span style="font-size:.82rem;font-weight:600">${esc(r)}</span>
+        <span style="font-size:.78rem">${d.total} cands · <span style="color:var(--green)">${Math.round(d.aprov/d.total*100)}% aprov</span></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(d.total/maxR*100)}%;background:var(--blue-500)"></div></div>
+    </div>`).join(''):'<p class="text-muted text-sm">Nenhum dado</p>';
+}
+
+function clearAnFilters() {
+  document.getElementById('an-feirao').value='';
+  document.getElementById('an-cidade').value='';
+  document.getElementById('an-rec').value='';
+  document.getElementById('an-bt').value='';
+}
+
+// ═══════════════════════════════════════
+// CHART HELPERS
+// ═══════════════════════════════════════
+function renderDonut(canvasId, cache, key, labels, data, colors) {
+  if(cache[key]) { cache[key].destroy(); }
+  const ctx = document.getElementById(canvasId);
+  if(!ctx) return;
+  cache[key] = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets:[{data, backgroundColor:colors, borderWidth:2, borderColor:'#fff'}] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}} } }
+  });
+}
+function renderBar(canvasId, cache, key, labels, data, color) {
+  if(cache[key]) { cache[key].destroy(); }
+  const ctx = document.getElementById(canvasId);
+  if(!ctx) return;
+  cache[key] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets:[{data, backgroundColor:color, borderRadius:4}] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{stepSize:1}}} }
+  });
+}
+
+// ═══════════════════════════════════════
+// GLOBAL SEARCH
+// ═══════════════════════════════════════
+function doGlobalSearch(q) {
+  const dd = document.getElementById('search-results-dropdown');
+  if(!q.trim()){dd.style.display='none';return;}
+  const nq = normStr(q);
+  const cands = DB.candidatos().filter(c=>
+    normStr(c.nome).includes(nq)||normStr(c.cpf).includes(nq)||normStr(c.cr||'').includes(nq)||
+    normStr(c.recrutadorNome).includes(nq)||normStr(c.statusProcesso).includes(nq)
+  ).slice(0,8);
+  const feiraos = DB.feiraos().filter(f=>normStr(f.nomeFeirao).includes(nq)||normStr(f.localEvento).includes(nq)||normStr(f.recrutadorNome).includes(nq)).slice(0,4);
+  let html = '';
+  if(feiraos.length) {
+    html += `<div style="padding:6px 12px;font-size:.72rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;background:var(--gray-100)">Feirões</div>`;
+    html += feiraos.map(f=>`<div class="srd-item" onclick="navigate('feiraos')">
+      <div class="srd-name">${esc(f.nomeFeirao)}</div>
+      <div class="srd-meta">${esc(f.localEvento)} · ${esc(f.recrutadorNome)}</div>
+    </div>`).join('');
+  }
+  if(cands.length) {
+    html += `<div style="padding:6px 12px;font-size:.72rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;background:var(--gray-100)">Candidatos</div>`;
+    html += cands.map(c=>`<div class="srd-item" onclick="viewCandidato('${c.id}')">
+      <div class="srd-name">${esc(c.nome)} ${c.bancoTalentosFlag?'⭐':''}</div>
+      <div class="srd-meta">CPF: ${esc(c.cpf)} · CR: ${esc(c.cr||'—')} · ${statusLabel(c.statusProcesso)}</div>
+    </div>`).join('');
+  }
+  if(!html) html = '<div class="srd-empty">Nenhum resultado encontrado</div>';
+  dd.innerHTML = html;
+  dd.style.display = 'block';
+}
+
+// ═══════════════════════════════════════
+// EXCEL IMPORT
+// ═══════════════════════════════════════
+let importPreviewData = [];
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file) processFile(file);
+}
+function handleFileSelect(e) { const file = e.target.files[0]; if(file) processFile(file); }
+
+function processFile(file) {
+  document.getElementById('imp-status').innerHTML = `<span class="badge badge-blue">Processando: ${esc(file.name)}</span>`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      importPreviewData = rows;
+      renderImportPreview(rows);
+    } catch(err) {
+      document.getElementById('imp-status').innerHTML = `<span class="badge badge-red">Erro ao ler arquivo: ${err.message}</span>`;
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function renderImportPreview(rows) {
+  const errors = [];
+  const valid = [];
+  const existingCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
+  rows.forEach((r,i) => {
+    const cpf = String(r.cpf||r.CPF||'').trim();
+    const nome = String(r.nome||r.Nome||r.NOME||'').trim();
+    const rowErrors = [];
+    if(!nome) rowErrors.push('Nome ausente');
+    if(!cpf) rowErrors.push('CPF ausente');
+    else if(existingCPFs.has(normStr(cpf))) rowErrors.push('CPF duplicado');
+    if(rowErrors.length) errors.push({row:i+2, errors:rowErrors});
+    else valid.push(r);
+  });
+  document.getElementById('imp-status').innerHTML = `<span class="badge badge-green">${valid.length} válidos</span> <span class="badge badge-red">${errors.length} com erro</span>`;
+  document.getElementById('btn-imp-confirm').style.display = valid.length ? '' : 'none';
+  const preview = document.getElementById('imp-preview');
+  if(!rows.length){preview.innerHTML='<p class="text-muted text-sm">Planilha vazia</p>';return;}
+  const cols = Object.keys(rows[0]).slice(0,6);
+  preview.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>#</th>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Status</th></tr></thead>
+    <tbody>${rows.slice(0,20).map((r,i)=>{
+      const cpf=String(r.cpf||r.CPF||'').trim();
+      const nome=String(r.nome||r.Nome||r.NOME||'').trim();
+      const hasErr=!nome||!cpf||existingCPFs.has(normStr(cpf));
+      return `<tr style="${hasErr?'background:var(--red-light)':''}"><td>${i+2}</td>${cols.map(c=>`<td>${esc(String(r[c]||''))}</td>`).join('')}<td>${hasErr?'<span class="badge badge-red">Erro</span>':'<span class="badge badge-green">OK</span>'}</td></tr>`;
+    }).join('')}</tbody>
+  </table></div>${rows.length>20?`<p class="text-muted text-sm" style="margin-top:8px">Mostrando 20 de ${rows.length} linhas</p>`:''}`;
+  document.getElementById('imp-errors').innerHTML = errors.length ? errors.map(e=>`<div class="badge badge-red" style="margin:3px;display:inline-block">Linha ${e.row}: ${e.errors.join(', ')}</div>`).join('') : '<p class="text-muted text-sm">Nenhum erro!</p>';
+}
+
+async function confirmImport() {
+  const fid = document.getElementById('imp-feirao').value;
+  if(!fid){toast('Selecione um feirão de destino','error');return;}
+  const f = DB.feiraos().find(x=>x.id===fid);
+  if(!f){toast('Feirão não encontrado','error');return;}
+  const existingCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
+  let cands = DB.candidatos();
+  let added = 0;
+  importPreviewData.forEach(r => {
+    const cpf = String(r.cpf||r.CPF||'').trim();
+    const nome = String(r.nome||r.Nome||r.NOME||'').trim();
+    if(!nome||!cpf||existingCPFs.has(normStr(cpf))) return;
+    const mapStatus = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','em analise':'EM_ANALISE','em_analise':'EM_ANALISE','banco talentos':'BANCO_TALENTOS','banco_talentos':'BANCO_TALENTOS'};return m[normStr(String(v||''))]||'EM_ANALISE';};
+    const mapAnt = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO'};return m[normStr(String(v||''))]||'APROVADO';};
+    const mapRec = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','nunca':'NUNCA_TRABALHOU_NA_GPS','nunca_trabalhou_na_gps':'NUNCA_TRABALHOU_NA_GPS'};return m[normStr(String(v||''))]||'NUNCA_TRABALHOU_NA_GPS';};
+    const c = {
+      id:uid(), feiraoId:fid, feiraoNome:f.nomeFeirao, feiraoLocal:f.localEvento,
+      nome, cpf, telefone:String(r.telefone||r.Telefone||'').trim(),
+      cr:String(r.cr||r.CR||'').trim(),
+      statusProcesso:mapStatus(r.statusProcesso||r.status||''),
+      antecedentes:mapAnt(r.antecedentes||r.Antecedentes||''),
+      recontratacao:mapRec(r.recontratacao||r.Recontratacao||''),
+      motivoReprovacao:String(r.motivoReprovacao||r.motivo||'').trim(),
+      observacoes:String(r.observacoes||r.Observacoes||'').trim(),
+      recrutadorId:f.recrutadorId, recrutadorNome:f.recrutadorNome,
+      bancoTalentosFlag: normStr(String(r.bancoTalentos||r.BancoTalentos||r.banco_talentos||r['Banco Talentos']||'')).startsWith('s'),
+    };
+    applyRuleEngine(c);
+    cands.push(c);
+    existingCPFs.add(normStr(cpf));
+    added++;
+  });
+  DB.saveCandidatos(cands);
+  toast(`${added} candidato(s) importado(s)!`,'success');
+  document.getElementById('btn-imp-confirm').style.display='none';
+  importPreviewData=[];
+  document.getElementById('imp-preview').innerHTML='<p class="text-muted text-sm text-center" style="padding:30px 0">Importação concluída!</p>';
+  document.getElementById('imp-status').innerHTML='';
+  document.getElementById('imp-file').value='';
+}
+
+function downloadTemplate() {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['nome','cpf','telefone','cr','statusProcesso','antecedentes','recontratacao','motivoReprovacao','observacoes','bancoTalentos'],
+    ['João Silva','123.456.789-00','(11) 91234-5678','CR-001','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','','','NAO'],
+    ['Maria Souza','987.654.321-00','(11) 98765-4321','CR-002','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','','','SIM'],
+  ]);
+  // Largura das colunas para melhor leitura
+  ws['!cols'] = [
+    {wch:22},{wch:16},{wch:18},{wch:10},{wch:18},{wch:14},{wch:26},{wch:22},{wch:22},{wch:14}
+  ];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
+  XLSX.writeFile(wb,'modelo_candidatos_gps.xlsx');
+}
+
+// ═══════════════════════════════════════
+// EXCEL EXPORTS
+// ═══════════════════════════════════════
+function exportFeiraosExcel() {
+  const data = DB.feiraos().map(f=>({'Nome Feirão':f.nomeFeirao,'Data':f.dataEvento,'Local':f.localEvento,'Recrutador':f.recrutadorNome,'Status':f.statusFeirao,'Observações':f.observacoes||''}));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Feirões');
+  XLSX.writeFile(wb,`feiraos_gps_${today()}.xlsx`);
+  toast('Excel exportado!','success');
+}
+
+function exportCandidatosExcel() {
+  const data = getFilteredCandidatos().map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','CR':c.cr||'','Feirão':c.feiraoNome,'Recrutador':c.recrutadorNome,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Banco Talentos':c.bancoTalentosFlag?'SIM':'NÃO'}));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
+  XLSX.writeFile(wb,`candidatos_gps_${today()}.xlsx`);
+  toast('Excel exportado!','success');
+}
+
+function exportTalentosExcel() {
+  const data = DB.candidatos().filter(c=>c.bancoTalentosFlag).map(c=>({'Nome':c.nome,'CPF':c.cpf,'CR':c.cr||'','Feirão Origem':c.feiraoNome,'Cidade':c.feiraoLocal||'','Recrutador':c.recrutadorNome,'Recontratação':c.recontratacao}));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Banco de Talentos');
+  XLSX.writeFile(wb,`banco_talentos_gps_${today()}.xlsx`);
+  toast('Excel exportado!','success');
+}
+
+// ═══════════════════════════════════════
+// PDF EXPORTS
+// ═══════════════════════════════════════
+function exportCandidatosPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape'});
+  const cands = getFilteredCandidatos();
+  doc.setFillColor(10,22,40); doc.rect(0,0,297,20,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(14); doc.setFont(undefined,'bold');
+  doc.text('GRUPO GPS – Relatório de Candidatos', 14, 13);
+  doc.setFontSize(8); doc.setFont(undefined,'normal');
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} | Total: ${cands.length}`, 230, 13);
+  doc.setTextColor(0,0,0);
+  const headers = ['Nome','CPF','CR','Feirão','Recrutador','Status','Antecedentes','BT'];
+  const rows = cands.map(c=>[c.nome,c.cpf,c.cr||'',c.feiraoNome.substring(0,25),c.recrutadorNome,statusLabel(c.statusProcesso),c.antecedentes==='APROVADO'?'APR':'REP',c.bancoTalentosFlag?'SIM':'']);
+  let y = 28;
+  doc.setFillColor(219,234,254); doc.rect(14,y-5,269,8,'F');
+  doc.setFontSize(8); doc.setFont(undefined,'bold');
+  const colW = [50,28,20,55,40,25,25,12];
+  let x=14; headers.forEach((h,i)=>{doc.text(h,x,y);x+=colW[i];});
+  y+=6; doc.setFont(undefined,'normal');
+  rows.forEach((r,ri)=>{
+    if(y>185){doc.addPage();y=20;}
+    if(ri%2===0){doc.setFillColor(239,246,255);doc.rect(14,y-4,269,6,'F');}
+    x=14; r.forEach((v,i)=>{doc.text(String(v).substring(0,colW[i]/2+2),x,y);x+=colW[i];});
+    y+=7;
+  });
+  doc.save(`candidatos_gps_${today()}.pdf`);
+  toast('PDF gerado!','success');
+}
+
+function exportTalentosPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const list = DB.candidatos().filter(c=>c.bancoTalentosFlag);
+  doc.setFillColor(10,22,40); doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(15); doc.setFont(undefined,'bold');
+  doc.text('GRUPO GPS – Banco de Talentos', 14, 14);
+  doc.setTextColor(0,0,0); doc.setFontSize(9); doc.setFont(undefined,'normal');
+  let y=30;
+  doc.text(`Total de talentos: ${list.length}  |  Gerado em: ${new Date().toLocaleDateString('pt-BR')}`,14,y); y+=10;
+  list.forEach((c,i)=>{
+    if(y>270){doc.addPage();y=20;}
+    if(i%2===0){doc.setFillColor(239,246,255);doc.rect(14,y-4,182,8,'F');}
+    doc.setFont(undefined,'bold'); doc.text(c.nome,14,y);
+    doc.setFont(undefined,'normal'); doc.text(`CPF: ${c.cpf}  CR: ${c.cr||'—'}  Feirão: ${c.feiraoNome.substring(0,30)}`,14,y+5);
+    y+=12;
+  });
+  doc.save(`banco_talentos_gps_${today()}.pdf`);
+  toast('PDF gerado!','success');
+}
+
+function exportAnalyticsPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const cands = DB.candidatos();
+  const aprov=cands.filter(c=>c.statusProcesso==='APROVADO').length;
+  const reprov=cands.filter(c=>c.statusProcesso==='REPROVADO').length;
+  const analise=cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const bt=cands.filter(c=>c.bancoTalentosFlag).length;
+  doc.setFillColor(10,22,40); doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(15); doc.setFont(undefined,'bold');
+  doc.text('GRUPO GPS – Relatório Analytics', 14, 14);
+  doc.setTextColor(0,0,0);
+  let y=32;
+  doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text('KPIs Globais',14,y); y+=8;
+  [['Total de Candidatos',cands.length],['Aprovados',aprov],['Reprovados',reprov],['Em Análise',analise],['Banco de Talentos',bt],['Taxa de Aprovação',`${cands.length?Math.round(aprov/cands.length*100):0}%`]].forEach(([k,v])=>{
+    doc.setFont(undefined,'normal'); doc.setFontSize(9);
+    doc.text(`${k}:`,14,y); doc.setFont(undefined,'bold'); doc.text(String(v),90,y); y+=7;
+  });
+  doc.save(`analytics_gps_${today()}.pdf`);
+  toast('PDF Analytics gerado!','success');
+}
+
+// ═══════════════════════════════════════
+// BACKUP
+// ═══════════════════════════════════════
+function autoBackup() {
+  const data = {
+    ts: new Date().toISOString(),
+    feiraos: DB.feiraos(),
+    candidatos: DB.candidatos(),
+    recrutadores: DB.recrutadores(),
+    eventos: DB.eventos(),
+  };
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`backup_gps_${today()}.json`; a.click();
+  toast('Backup exportado!','success');
+}
+
+// ═══════════════════════════════════════
+// ════════ CALENDÁRIO (NOVO) ════════════
+// ═══════════════════════════════════════
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let editEventId = null;
+
+const TIPO_CONFIG = {
+  feirao:     { label:'Feirão',     cls:'cal-event-blue',   icon:'🏢' },
+  entrevista: { label:'Entrevista', cls:'cal-event-green',  icon:'👤' },
+  tarefa:     { label:'Tarefa',     cls:'cal-event-yellow', icon:'✅' },
+  prazo:      { label:'Prazo',      cls:'cal-event-red',    icon:'⚠️' },
+  reuniao:    { label:'Reunião',    cls:'cal-event-purple', icon:'🤝' },
+  outro:      { label:'Outro',      cls:'cal-event-gray',   icon:'📌' },
+};
+
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MESES_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function calGoToday() {
+  calYear = new Date().getFullYear();
+  calMonth = new Date().getMonth();
+  renderCalendar();
+}
+
+function calNavigate(dir) {
+  calMonth += dir;
+  if(calMonth < 0) { calMonth = 11; calYear--; }
+  if(calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+}
+
+// Get all events for a given date string YYYY-MM-DD
+function getEventsForDate(dateStr) {
+  const eventos = getAllExpandedEvents();
+  return eventos.filter(e => e.dataIni <= dateStr && (e.dataFim || e.dataIni) >= dateStr);
+}
+
+// Expand recurring events for current month display
+function getAllExpandedEvents() {
+  const eventos = DB.eventos();
+  const expanded = [];
+  eventos.forEach(e => {
+    expanded.push(e);
+    if(e.recorrente) {
+      // Add weekly repeats for 8 weeks forward
+      for(let w = 1; w <= 8; w++) {
+        const d = new Date(e.dataIni + 'T12:00:00');
+        d.setDate(d.getDate() + w*7);
+        const newDate = d.toISOString().slice(0,10);
+        expanded.push({...e, id: e.id+'_rec_'+w, dataIni: newDate, dataFim: newDate, _recurring: true, _parentId: e.id});
+      }
+    }
+  });
+  return expanded;
+}
+
+function renderCalendar() {
+  document.getElementById('cal-month-label').textContent = `${MESES[calMonth]} ${calYear}`;
+  const viewType = document.getElementById('cal-view-type').value;
+  document.getElementById('cal-month-view').style.display = viewType==='month' ? '' : 'none';
+  document.getElementById('cal-agenda-view').style.display = viewType==='agenda' ? '' : 'none';
+
+  if(viewType === 'month') renderCalMonthView();
+  else renderCalAgendaView();
+
+  renderCalUpcoming();
+  renderCalMonthStats();
+  renderCalFeiraoSync();
+  renderCalRankingRec();
+  renderCalTaxaRec();
+}
+
+function renderCalMonthView() {
+  const grid = document.getElementById('cal-days-grid');
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0,10);
+
+  // First day of month
+  const firstDay = new Date(calYear, calMonth, 1);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+
+  const cells = [];
+  // Previous month padding
+  for(let i = startDow-1; i >= 0; i--) {
+    cells.push({ day: daysInPrev-i, month: calMonth-1, year: calYear, other: true });
+  }
+  // Current month
+  for(let d = 1; d <= daysInMonth; d++) {
+    cells.push({ day: d, month: calMonth, year: calYear, other: false });
+  }
+  // Next month padding
+  let next = 1;
+  while(cells.length % 7 !== 0) {
+    cells.push({ day: next++, month: calMonth+1, year: calYear, other: true });
+  }
+
+  grid.innerHTML = cells.map(cell => {
+    let m = cell.month, y = cell.year;
+    if(m < 0) { m = 11; y--; }
+    if(m > 11) { m = 0; y++; }
+    const pad = n => String(n).padStart(2,'0');
+    const dateStr = `${y}-${pad(m+1)}-${pad(cell.day)}`;
+    const evs = getEventsForDate(dateStr);
+    const isToday = dateStr === todayStr;
+    const hasEvs = evs.length > 0;
+
+    const maxShow = 3;
+    const pillsHtml = evs.slice(0, maxShow).map(e => {
+      const cfg = TIPO_CONFIG[e.tipo] || TIPO_CONFIG.outro;
+      return `<span class="cal-event-pill ${cfg.cls}" onclick="event.stopPropagation();editEvent('${e._recurring ? e._parentId : e.id}')" title="${esc(e.titulo)}">${cfg.icon} ${esc(e.titulo)}</span>`;
+    }).join('');
+    const moreHtml = evs.length > maxShow ? `<span class="cal-more" onclick="event.stopPropagation();openDayModal('${dateStr}')">+${evs.length - maxShow} mais</span>` : '';
+    const dayNumHtml = isToday
+      ? `<div class="cal-day-num"><span style="background:var(--blue-600);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center">${cell.day}</span></div>`
+      : `<div class="cal-day-num">${cell.day}</div>`;
+
+    return `<div class="cal-day${cell.other?' other-month':''}${hasEvs?' has-events':''}${isToday?' today':''}" onclick="openDayModal('${dateStr}')">
+      ${dayNumHtml}
+      ${pillsHtml}
+      ${moreHtml}
+    </div>`;
+  }).join('');
+}
+
+function renderCalAgendaView() {
+  const list = document.getElementById('cal-agenda-list');
+  const eventos = getAllExpandedEvents();
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const future = eventos
+    .filter(e => new Date(e.dataIni + 'T12:00:00') >= now)
+    .sort((a,b) => a.dataIni.localeCompare(b.dataIni))
+    .slice(0, 30);
+
+  if(!future.length) {
+    list.innerHTML = '<div class="card card-body text-muted text-sm text-center" style="padding:40px">Nenhum evento próximo encontrado.</div>';
+    return;
+  }
+
+  let lastDate = '';
+  list.innerHTML = future.map(e => {
+    const cfg = TIPO_CONFIG[e.tipo] || TIPO_CONFIG.outro;
+    const d = new Date(e.dataIni + 'T12:00:00');
+    const dateLabel = d.toLocaleDateString('pt-BR', {weekday:'long', day:'numeric', month:'long'});
+    const header = e.dataIni !== lastDate ? `<div style="font-size:.8rem;font-weight:800;color:var(--blue-800);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--blue-100)">${dateLabel}</div>` : '';
+    lastDate = e.dataIni;
+    return `${header}<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="${e._recurring?'editEvent(\''+e._parentId+'\')':'editEvent(\''+e.id+'\')'}">
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 16px">
+        <div style="font-size:1.5rem">${cfg.icon}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:.88rem">${esc(e.titulo)}</div>
+          <div class="text-muted text-sm">${e.horaIni||''}${e.horaFim?' – '+e.horaFim:''} ${e.local?'· '+esc(e.local):''} ${e.responsavel?'· '+esc(e.responsavel):''}</div>
+        </div>
+        <span class="badge ${cfg.cls.replace('cal-event-','badge-')}">${cfg.label}</span>
+        ${e._recurring ? '<span class="badge badge-gray" style="font-size:.65rem">↻</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderCalUpcoming() {
+  const eventos = getAllExpandedEvents();
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const upcoming = eventos
+    .filter(e => new Date(e.dataIni + 'T12:00:00') >= now)
+    .sort((a,b) => a.dataIni.localeCompare(b.dataIni))
+    .slice(0, 8);
+
+  const el = document.getElementById('cal-upcoming-list');
+  if(!upcoming.length) {
+    el.innerHTML = '<p class="text-muted text-sm" style="padding:16px;text-align:center">Nenhum evento próximo</p>';
+    return;
+  }
+  el.innerHTML = upcoming.map(e => {
+    const cfg = TIPO_CONFIG[e.tipo] || TIPO_CONFIG.outro;
+    const d = new Date(e.dataIni + 'T12:00:00');
+    return `<div class="cal-upcoming-item" onclick="${e._recurring?'editEvent(\''+e._parentId+'\')':'editEvent(\''+e.id+'\')'}">
+      <div class="cal-up-date">
+        <div class="cal-up-day">${d.getDate()}</div>
+        <div class="cal-up-mon">${MESES_SHORT[d.getMonth()]}</div>
+      </div>
+      <div class="cal-up-info">
+        <div class="cal-up-title">${cfg.icon} ${esc(e.titulo)}</div>
+        <div class="cal-up-meta">${e.horaIni||'Todo o dia'} · ${esc(e.responsavel||'—')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderCalMonthStats() {
+  const eventos = getAllExpandedEvents();
+  const pad = n => String(n).padStart(2,'0');
+  const monthStr = `${calYear}-${pad(calMonth+1)}`;
+  const monthEvs = eventos.filter(e => e.dataIni.startsWith(monthStr));
+  const nFeiraos = monthEvs.filter(e => e.tipo === 'feirao').length;
+  const nEntrevistas = monthEvs.filter(e => e.tipo === 'entrevista').length;
+  const el = document.getElementById('cal-month-stats');
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:4px 0">
+      <span style="font-size:1.6rem">🏢</span>
+      <div>
+        <div style="font-weight:800;font-size:1.3rem;color:var(--blue-700);line-height:1">${nFeiraos}</div>
+        <div class="text-muted" style="font-size:.75rem;margin-top:2px">Feirão(ões) no mês</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:4px 0">
+      <span style="font-size:1.6rem">👤</span>
+      <div>
+        <div style="font-weight:800;font-size:1.3rem;color:var(--green);line-height:1">${nEntrevistas}</div>
+        <div class="text-muted" style="font-size:.75rem;margin-top:2px">Entrevista(s) no mês</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCalFeiraoSync() {
+  const feiraos = DB.feiraos().filter(f=>f.dataEvento).sort((a,b)=>a.dataEvento.localeCompare(b.dataEvento)).slice(0,5);
+  const el = document.getElementById('cal-feiraos-sync');
+  if(!feiraos.length){el.innerHTML='<p class="text-muted text-sm">Nenhum feirão com data cadastrada.</p>';return;}
+  el.innerHTML = feiraos.map(f=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-100)">
+      <div>
+        <div style="font-size:.82rem;font-weight:600">${esc(f.nomeFeirao.substring(0,28))}</div>
+        <div class="text-muted text-sm">${fmt(f.dataEvento)} · ${esc(f.localEvento)}</div>
+      </div>
+      ${f.statusFeirao==='ABERTO'?'<span class="badge badge-green">Aberto</span>':'<span class="badge badge-gray">Encerrado</span>'}
+    </div>`).join('');
+}
+
+function renderCalRankingRec() {
+  const feiraos = DB.feiraos();
+  const recs = DB.recrutadores();
+  const el = document.getElementById('cal-ranking-rec');
+  if(!el) return;
+  // Contagem de feirões por recrutador
+  const countMap = {};
+  feiraos.forEach(f => {
+    if(f.recrutadorNome) {
+      countMap[f.recrutadorNome] = (countMap[f.recrutadorNome]||0) + 1;
+    }
+  });
+  const list = Object.entries(countMap).sort((a,b) => b[1]-a[1]).slice(0,8);
+  if(!list.length){el.innerHTML='<p class="text-muted text-sm">Nenhum dado disponível</p>';return;}
+  const max = list[0][1]||1;
+  el.innerHTML = list.map(([nome,qtd],i) => `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:.82rem;font-weight:600;display:flex;align-items:center;gap:5px">
+          <span style="font-size:.75rem;background:var(--blue-100);color:var(--blue-700);border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-weight:800">${i+1}</span>
+          ${esc(nome)}
+        </span>
+        <span class="badge badge-blue">${qtd} feirão(ões)</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(qtd/max*100)}%;background:var(--blue-500)"></div></div>
+    </div>`).join('');
+}
+
+function renderCalTaxaRec() {
+  const cands = DB.candidatos();
+  const el = document.getElementById('cal-taxa-rec');
+  if(!el) return;
+  const recMap = {};
+  cands.forEach(c => {
+    const k = c.recrutadorNome||'—';
+    if(!recMap[k]) recMap[k] = {total:0, aprov:0};
+    recMap[k].total++;
+    if(c.statusProcesso==='APROVADO') recMap[k].aprov++;
+  });
+  const list = Object.entries(recMap)
+    .filter(([,d]) => d.total > 0)
+    .map(([nome,d]) => ({nome, total:d.total, aprov:d.aprov, taxa:Math.round(d.aprov/d.total*100)}))
+    .sort((a,b) => b.taxa-a.taxa||b.total-a.total)
+    .slice(0,8);
+  if(!list.length){el.innerHTML='<p class="text-muted text-sm">Nenhum dado disponível</p>';return;}
+  el.innerHTML = list.map(r => {
+    const cor = r.taxa >= 70 ? 'var(--green)' : r.taxa >= 40 ? 'var(--yellow)' : 'var(--red)';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:.82rem;font-weight:600">${esc(r.nome)}</span>
+        <span style="font-size:.8rem;font-weight:800;color:${cor}">${r.taxa}%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${r.taxa}%;background:${cor}"></div></div>
+      <div style="font-size:.72rem;color:var(--gray-500);margin-top:2px">${r.aprov} aprovados de ${r.total} candidatos</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── EVENT MODAL ───
+function openEventModal(id=null, prefillDate=null) {
+  editEventId = id;
+  populateFeiraoSelects();
+  document.getElementById('mev-title').textContent = id ? 'Editar Evento' : 'Novo Evento';
+  document.getElementById('mev-delete-btn').style.display = id ? '' : 'none';
+  document.getElementById('mev-resp-list').style.display = 'none';
+
+  if(id) {
+    const e = DB.eventos().find(x=>x.id===id);
+    if(!e) return;
+    document.getElementById('mev-titulo').value = e.titulo;
+    document.getElementById('mev-data-ini').value = e.dataIni;
+    document.getElementById('mev-data-fim').value = e.dataFim||'';
+    document.getElementById('mev-hora-ini').value = e.horaIni||'';
+    document.getElementById('mev-hora-fim').value = e.horaFim||'';
+    document.getElementById('mev-tipo').value = e.tipo;
+    document.getElementById('mev-prioridade').value = e.prioridade||'normal';
+    document.getElementById('mev-local').value = e.local||'';
+    document.getElementById('mev-resp-input').value = e.responsavel||'';
+    document.getElementById('mev-resp-id').value = e.respId||'';
+    document.getElementById('mev-feirao-link').value = e.feiraoLink||'';
+    document.getElementById('mev-desc').value = e.descricao||'';
+    document.getElementById('mev-recorrente').checked = e.recorrente||false;
+  } else {
+    document.getElementById('mev-titulo').value = '';
+    document.getElementById('mev-data-ini').value = prefillDate||'';
+    document.getElementById('mev-data-fim').value = prefillDate||'';
+    document.getElementById('mev-hora-ini').value = '';
+    document.getElementById('mev-hora-fim').value = '';
+    document.getElementById('mev-tipo').value = 'feirao';
+    document.getElementById('mev-prioridade').value = 'normal';
+    document.getElementById('mev-local').value = '';
+    document.getElementById('mev-resp-input').value = '';
+    document.getElementById('mev-resp-id').value = '';
+    document.getElementById('mev-feirao-link').value = '';
+    document.getElementById('mev-desc').value = '';
+    document.getElementById('mev-recorrente').checked = false;
+  }
+  closeModal('modal-cal-day');
+  openModal('modal-event');
+}
+
+function editEvent(id) {
+  openEventModal(id);
+}
+
+async function saveEvent() {
+  const titulo = document.getElementById('mev-titulo').value.trim();
+  const dataIni = document.getElementById('mev-data-ini').value;
+  if(!titulo){toast('Título é obrigatório','error');return;}
+  if(!dataIni){toast('Data de início é obrigatória','error');return;}
+  const tipo = document.getElementById('mev-tipo').value;
+  const local = document.getElementById('mev-local').value.trim();
+  const respNome = document.getElementById('mev-resp-input').value.trim();
+  const respId = document.getElementById('mev-resp-id').value;
+  let feiraoLink = document.getElementById('mev-feirao-link').value;
+  const desc = document.getElementById('mev-desc').value.trim();
+
+  const e = {
+    id: editEventId||uid(),
+    titulo, dataIni,
+    dataFim: document.getElementById('mev-data-fim').value || dataIni,
+    horaIni: document.getElementById('mev-hora-ini').value,
+    horaFim: document.getElementById('mev-hora-fim').value,
+    tipo,
+    prioridade: document.getElementById('mev-prioridade').value,
+    local, responsavel: respNome, respId,
+    feiraoLink,
+    descricao: desc,
+    recorrente: document.getElementById('mev-recorrente').checked,
+  };
+
+  let all = DB.eventos();
+  if(editEventId) {
+    const idx = all.findIndex(x=>x.id===editEventId);
+    all[idx] = e;
+    toast('Evento atualizado!','success');
+  } else {
+    // SYNC: Se tipo=feirão sem vínculo existente → cria Feirão automaticamente
+    if(tipo === 'feirao' && !feiraoLink) {
+      const newFeiraoId = uid();
+      e.feiraoLink = newFeiraoId;
+      let recId = respId;
+      let recNome = respNome;
+      if(!recId && recNome) {
+        const recs = DB.recrutadores();
+        const found = recs.find(r => r.nome === recNome);
+        if(found) { recId = found.id; }
+        else {
+          recId = uid();
+          await DB.saveRecrutadores([...recs, {id:recId, nome:recNome}]);
+        }
+      }
+      if(recId && recNome) {
+        let feiraos = DB.feiraos();
+        feiraos.push({
+          id:newFeiraoId, nomeFeirao:titulo, dataEvento:dataIni,
+          localEvento:local||'', recrutadorId:recId, recrutadorNome:recNome,
+          statusFeirao:'ABERTO',
+          observacoes: desc || 'Feirão criado automaticamente via Calendário',
+        });
+        await DB.saveFeiraos(feiraos);
+        toast('Feirão criado automaticamente e vinculado ao evento! 🏢','success');
+      } else {
+        toast('Evento criado! (Recrutador não identificado, Feirão não gerado)','info');
+      }
+    } else {
+      toast('Evento criado!','success');
+    }
+    all.push(e);
+  }
+  await DB.saveEventos(all);
+  closeModal('modal-event');
+  renderCalendar();
+}
+
+function deleteCurrentEvent() {
+  if(!editEventId) return;
+  confirm_('Excluir este evento?', async () => {
+    await DB.saveEventos(DB.eventos().filter(e=>e.id!==editEventId));
+    closeModal('modal-event');
+    toast('Evento excluído!','success');
+    renderCalendar();
+  });
+}
+
+// ─── DAY MODAL ───
+function openDayModal(dateStr) {
+  const evs = getEventsForDate(dateStr);
+  const d = new Date(dateStr + 'T12:00:00');
+  const label = d.toLocaleDateString('pt-BR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  document.getElementById('mcd-title').textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  const body = document.getElementById('mcd-body');
+  if(!evs.length) {
+    body.innerHTML = '<p class="text-muted text-sm text-center" style="padding:20px">Nenhum evento neste dia.</p>';
+  } else {
+    body.innerHTML = evs.map(e => {
+      const cfg = TIPO_CONFIG[e.tipo]||TIPO_CONFIG.outro;
+      const pid = e._recurring ? e._parentId : e.id;
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:8px;background:var(--gray-50);margin-bottom:8px;cursor:pointer" onclick="closeModal('modal-cal-day');editEvent('${pid}')">
+        <span style="font-size:1.4rem">${cfg.icon}</span>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:.88rem">${esc(e.titulo)}</div>
+          <div class="text-muted text-sm">${e.horaIni||'Todo o dia'}${e.horaFim?' – '+e.horaFim:''} ${e.local?'· '+esc(e.local):''}</div>
+          ${e.descricao ? `<div class="text-sm" style="margin-top:4px;color:var(--gray-600)">${esc(e.descricao)}</div>` : ''}
+        </div>
+        <span class="badge ${cfg.cls.replace('cal-event-','badge-')}" style="white-space:nowrap">${cfg.label}</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('mcd-add-btn').onclick = () => openEventModal(null, dateStr);
+  openModal('modal-cal-day');
+}
+
+// ═══════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════
+function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt(d) { if(!d) return ''; try{const [y,m,day]=d.split('-');return `${day}/${m}/${y}`;}catch{return d;} }
+function today() { return new Date().toISOString().slice(0,10); }
+
+function statusBadge(s) {
+  const map = {APROVADO:'badge-green',REPROVADO:'badge-red',EM_ANALISE:'badge-yellow',BANCO_TALENTOS:'badge-purple'};
+  return `<span class="badge ${map[s]||'badge-gray'}">${statusLabel(s)}</span>`;
+}
+function statusLabel(s) {
+  return {APROVADO:'Aprovado',REPROVADO:'Reprovado',EM_ANALISE:'Em Análise',BANCO_TALENTOS:'Banco Talentos'}[s]||s;
+}
+function antBadge(s) { return s==='APROVADO'?'<span class="badge badge-green">Aprovado</span>':'<span class="badge badge-red">Reprovado</span>'; }
+function reconBadge(s) {
+  const m={APROVADO:'<span class="badge badge-green">Aprovado</span>',REPROVADO:'<span class="badge badge-red">Reprovado</span>',NUNCA_TRABALHOU_NA_GPS:'<span class="badge badge-blue">Nunca GPS</span>'};
+  return m[s]||`<span class="badge badge-gray">${s||'—'}</span>`;
+}
+function maskCPF(i) {
+  let v=i.value.replace(/\D/g,'').substring(0,11);
+  v=v.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+  i.value=v;
+}
+function maskTel(i) {
+  let v=i.value.replace(/\D/g,'').substring(0,11);
+  v=v.length>10?v.replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3'):v.replace(/(\d{2})(\d{4})(\d{4})/,'($1) $2-$3');
+  i.value=v;
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+window._appReady = false;
+
+async function initApp() {
+  // Mostra loading se Supabase estiver configurado
+  let loader = null;
+  if (!window._useLocalFallback && window._initSupabase) {
+    loader = document.createElement('div');
+    loader.style.cssText = 'position:fixed;inset:0;background:rgba(10,22,40,.93);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#fff';
+    loader.innerHTML = `
+      <svg width="50" height="50" fill="none" stroke="#60a5fa" stroke-width="2" viewBox="0 0 24 24"
+        style="animation:_spin 1s linear infinite">
+        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+      </svg>
+      <div style="font-size:1.05rem;font-weight:700">Conectando ao Supabase…</div>
+      <div style="font-size:.82rem;color:#93c5fd;opacity:.8">Sincronizando dados em tempo real</div>
+      <style>@keyframes _spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
+    `;
+    document.body.appendChild(loader);
+    // Timeout de 15s — redes mais lentas têm tempo suficiente para conectar
+    let timedOut = false;
+    const timeout = new Promise(r => setTimeout(() => { timedOut = true; r(); }, 15000));
+    try {
+      await Promise.race([window._initSupabase(), timeout]);
+    } catch(e) {
+      console.error('Erro ao inicializar Supabase:', e);
+      window._useLocalFallback = true;
+    }
+    if (timedOut && !window._cacheReady.feiraos) {
+      console.warn('Supabase demorou demais — usando localStorage como fallback');
+      window._useLocalFallback = true;
+      window._showSetupWarning();
+    }
+    loader.remove();
+  }
+
+  window._appReady = true;
+  await seedIfEmpty();
+  populateFeiraoSelects();
+  renderDashboard();
+}
+
+initApp();
+</script>
+</body>
+</html>
