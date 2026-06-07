@@ -263,7 +263,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef2f8; colo
 /* ── CARDS ── */
 .card {
   background: var(--white); border: 1px solid var(--gray-200); border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.06); overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06); overflow: visible;
 }
 .card-header {
   padding: 18px 24px; border-bottom: 1px solid var(--gray-100);
@@ -322,7 +322,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef2f8; colo
 .form-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
 
 /* ── TABLE ── */
-.table-wrap { overflow-x: auto; border-radius: 0 0 16px 16px; width: 100%; }
+.table-wrap { overflow-x: auto; width: 100%; border-radius: 0 0 16px 16px; overflow-y: visible; scrollbar-width: thin; scrollbar-color: var(--blue-300) var(--gray-100); }
 table { width: 100%; border-collapse: collapse; font-size: .83rem; }
 thead th {
   background: #07111f; color: rgba(191,219,254,.85); font-weight: 700;
@@ -532,6 +532,50 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
 .tag-bt { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 10px; background: var(--purple-light); color: var(--purple); font-size: .72rem; font-weight: 700; }
 .overlay-close { position: fixed; inset: 0; z-index: 99; display: none; }
 .overlay-close.open { display: block; }
+
+/* ── TABELA CANDIDATOS: scroll horizontal visível sem rolar a página ── */
+#page-candidatos .card,
+#page-feiraos .card,
+#page-talentos .card {
+  overflow: hidden;
+  border-radius: 16px;
+}
+#page-candidatos .table-wrap,
+#page-feiraos .table-wrap,
+#page-talentos .table-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+#page-candidatos .table-wrap::-webkit-scrollbar,
+#page-feiraos .table-wrap::-webkit-scrollbar,
+#page-talentos .table-wrap::-webkit-scrollbar {
+  height: 8px;
+  width: 6px;
+}
+#page-candidatos .table-wrap::-webkit-scrollbar-track,
+#page-feiraos .table-wrap::-webkit-scrollbar-track,
+#page-talentos .table-wrap::-webkit-scrollbar-track {
+  background: var(--gray-100);
+  border-radius: 4px;
+}
+#page-candidatos .table-wrap::-webkit-scrollbar-thumb,
+#page-feiraos .table-wrap::-webkit-scrollbar-thumb,
+#page-talentos .table-wrap::-webkit-scrollbar-thumb {
+  background: var(--blue-300);
+  border-radius: 4px;
+}
+#page-candidatos .table-wrap::-webkit-scrollbar-thumb:hover,
+#page-feiraos .table-wrap::-webkit-scrollbar-thumb:hover,
+#page-talentos .table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--blue-400);
+}
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
 </style>
 </head>
 <body>
