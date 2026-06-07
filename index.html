@@ -1,3 +1,4 @@
+@@ -1,2908 +1,2908 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -149,7 +150,7 @@ window._showSetupWarning = () => {
   if (document.getElementById('sb-warning')) return;
   const b = document.createElement('div');
   b.id = 'sb-warning';
-  b.style.cssText = 'position:fixed;top:60px;left:240px;right:0;z-index:9999;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:11px 20px;display:flex;align-items:center;gap:12px;font-size:.83rem;color:#92400e';
+  b.style.cssText = 'position:fixed;top:64px;left:var(--sidebar-w, 260px);right:0;z-index:9999;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:11px 20px;display:flex;align-items:center;gap:12px;font-size:.83rem;color:#92400e';
   b.innerHTML = `
     <span style="font-size:1.2rem">⚠️</span>
     <div style="flex:1">
@@ -169,7 +170,7 @@ if (window._useLocalFallback) {
 </script>
 <style>
 :root {
-  --blue-900: #0a1628;
+  --blue-900: #07111f;
   --blue-800: #0d2142;
   --blue-700: #1a3a6b;
   --blue-600: #1e4d9b;
@@ -193,47 +194,48 @@ if (window._useLocalFallback) {
   --yellow-light: #fef9c3;
   --purple: #7c3aed;
   --purple-light: #ede9fe;
-  --sidebar-w: 240px;
-  --header-h: 60px;
+  --sidebar-w: 260px;
+  --header-h: 64px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--gray-100); color: var(--gray-900); display: flex; min-height: 100vh; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef2f8; color: var(--gray-900); display: flex; min-height: 100vh; }
 
 /* ── SIDEBAR ── */
 #sidebar {
-  width: var(--sidebar-w); min-height: 100vh; background: var(--blue-900);
+  width: var(--sidebar-w); min-height: 100vh; background: linear-gradient(180deg, #07111f 0%, #0d2142 100%);
   display: flex; flex-direction: column; position: fixed; left: 0; top: 0; z-index: 100;
-  transition: transform .3s;
+  transition: transform .3s; box-shadow: 4px 0 20px rgba(0,0,0,.2);
 }
-#sidebar-logo { padding: 18px 16px; border-bottom: 1px solid var(--blue-700); }
+#sidebar-logo { padding: 22px 20px; border-bottom: 1px solid rgba(255,255,255,.07); }
 #sidebar-logo .brand { color: var(--white); font-weight: 800; font-size: 1.1rem; letter-spacing: .5px; }
 #sidebar-logo .sub { color: var(--blue-300); font-size: .72rem; margin-top: 2px; }
 #sidebar nav { flex: 1; padding: 12px 0; }
 .nav-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 20px;
-  color: var(--blue-200); cursor: pointer; font-size: .88rem; font-weight: 500;
-  border-left: 3px solid transparent; transition: all .15s; user-select: none;
+  display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+  color: rgba(191,219,254,.75); cursor: pointer; font-size: .875rem; font-weight: 500;
+  border-left: 3px solid transparent; transition: all .18s; user-select: none;
+  margin: 2px 8px; border-radius: 10px;
 }
-.nav-item:hover { background: var(--blue-800); color: var(--white); }
-.nav-item.active { background: var(--blue-700); color: var(--white); border-left-color: var(--blue-400); }
+.nav-item:hover { background: rgba(255,255,255,.08); color: var(--white); border-left-color: transparent; }
+.nav-item.active { background: rgba(59,130,246,.2); color: var(--white); border-left-color: var(--blue-400); box-shadow: inset 0 0 0 1px rgba(59,130,246,.18); }
 .nav-item svg { flex-shrink: 0; opacity: .8; }
-#sidebar-footer { padding: 14px 16px; border-top: 1px solid var(--blue-700); color: var(--blue-300); font-size: .72rem; }
+#sidebar-footer { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,.07); color: rgba(147,197,253,.5); font-size: .72rem; }
 
 /* ── MAIN ── */
-#main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+#main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; background: #eef2f8; overflow-x: hidden; }
 #topbar {
-  height: var(--header-h); background: var(--white); border-bottom: 1px solid var(--gray-300);
-  display: flex; align-items: center; justify-content: space-between; padding: 0 24px;
-  position: sticky; top: 0; z-index: 90; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  height: var(--header-h); background: var(--white); border-bottom: 1px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
+  position: sticky; top: 0; z-index: 90; box-shadow: 0 2px 10px rgba(0,0,0,.07);
 }
-#topbar-title { font-weight: 700; font-size: 1rem; color: var(--blue-800); }
+#topbar-title { font-weight: 700; font-size: 1.05rem; color: var(--blue-800); }
 #global-search-wrap { position: relative; }
 #global-search {
-  border: 1px solid var(--gray-300); border-radius: 8px; padding: 7px 14px 7px 36px;
-  font-size: .85rem; width: 280px; outline: none; transition: border .2s;
-  background: var(--gray-100);
+  border: 1px solid var(--gray-200); border-radius: 10px; padding: 8px 14px 8px 38px;
+  font-size: .85rem; width: 300px; outline: none; transition: border .2s, box-shadow .2s;
+  background: var(--gray-50);
 }
-#global-search:focus { border-color: var(--blue-400); background: var(--white); }
+#global-search:focus { border-color: var(--blue-400); background: var(--white); box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
 #global-search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gray-500); pointer-events: none; }
 #search-results-dropdown {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--white);
@@ -249,147 +251,170 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--gray-10
 #menu-toggle { display: none; background: none; border: none; cursor: pointer; color: var(--gray-700); }
 
 /* ── CONTENT ── */
-#content { flex: 1; padding: 28px 28px 40px; }
-.page { display: none; }
-.page.active { display: block; }
+#content { flex: 1; padding: 28px 32px 56px; width: 100%; box-sizing: border-box; }
+.page { display: none; width: 100%; }
+.page.active { display: block; width: 100%; }
+
+/* ── PAGE HEADER ── */
+.page-header { margin-bottom: 24px; }
+.page-header h2 { font-size: 1.3rem; font-weight: 800; color: var(--blue-800); line-height: 1.2; }
+.page-header p  { color: var(--gray-500); font-size: .83rem; margin-top: 4px; }
 
 /* ── CARDS ── */
 .card {
-  background: var(--white); border: 1px solid var(--gray-300); border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04); overflow: hidden;
+  background: var(--white); border: 1px solid var(--gray-200); border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06); overflow: hidden;
 }
 .card-header {
-  padding: 16px 20px; border-bottom: 1px solid var(--gray-100);
+  padding: 18px 24px; border-bottom: 1px solid var(--gray-100);
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
 }
 .card-title { font-weight: 700; font-size: .95rem; color: var(--blue-800); }
-.card-body { padding: 20px; }
+.card-body { padding: 22px; }
 
 /* ── STAT CARDS ── */
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
 .stat-card {
-  background: var(--white); border-radius: 12px; padding: 18px 20px;
-  border: 1px solid var(--gray-300); box-shadow: 0 1px 4px rgba(0,0,0,.04);
-  display: flex; flex-direction: column; gap: 6px;
+  background: var(--white); border-radius: 16px; padding: 22px 24px;
+  border: 1px solid var(--gray-200); box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  display: flex; flex-direction: column; gap: 8px;
+  transition: box-shadow .2s, transform .2s;
 }
-.stat-card .stat-label { font-size: .78rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; }
-.stat-card .stat-value { font-size: 2rem; font-weight: 800; color: var(--blue-700); }
-.stat-card .stat-sub { font-size: .75rem; color: var(--gray-500); }
+.stat-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.1); transform: translateY(-2px); }
+.stat-card .stat-label { font-size: .74rem; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .6px; }
+.stat-card .stat-value { font-size: 2.2rem; font-weight: 800; color: var(--blue-700); line-height: 1; letter-spacing: -1px; }
+.stat-card .stat-sub { font-size: .75rem; color: var(--gray-500); margin-top: 2px; }
 .stat-card.green .stat-value { color: var(--green); }
-.stat-card.red .stat-value { color: var(--red); }
+.stat-card.red   .stat-value { color: var(--red); }
 .stat-card.yellow .stat-value { color: var(--yellow); }
 .stat-card.purple .stat-value { color: var(--purple); }
 
 /* ── BUTTONS ── */
 .btn {
-  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
-  border-radius: 8px; font-size: .84rem; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px;
+  border-radius: 9px; font-size: .84rem; font-weight: 600; cursor: pointer;
   border: none; transition: all .15s; white-space: nowrap;
 }
 .btn-primary { background: var(--blue-600); color: var(--white); }
-.btn-primary:hover { background: var(--blue-700); }
-.btn-secondary { background: var(--gray-100); color: var(--gray-700); border: 1px solid var(--gray-300); }
-.btn-secondary:hover { background: var(--gray-300); }
-.btn-danger { background: var(--red-light); color: var(--red); }
+.btn-primary:hover { background: var(--blue-700); box-shadow: 0 4px 12px rgba(37,99,235,.35); }
+.btn-secondary { background: var(--white); color: var(--gray-700); border: 1px solid var(--gray-300); }
+.btn-secondary:hover { background: var(--gray-100); border-color: var(--gray-400); }
+.btn-danger { background: var(--red-light); color: var(--red); border: 1px solid #fca5a5; }
 .btn-danger:hover { background: #fca5a5; }
 .btn-success { background: var(--green-light); color: var(--green); }
 .btn-success:hover { background: #86efac; }
-.btn-sm { padding: 5px 10px; font-size: .78rem; }
-.btn-icon { padding: 6px; border-radius: 6px; background: none; border: 1px solid var(--gray-300); color: var(--gray-700); cursor: pointer; transition: all .15s; }
+.btn-sm { padding: 5px 12px; font-size: .78rem; }
+.btn-icon { padding: 6px; border-radius: 7px; background: none; border: 1px solid var(--gray-300); color: var(--gray-700); cursor: pointer; transition: all .15s; }
 .btn-icon:hover { background: var(--gray-100); }
 
 /* ── FORMS ── */
-.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 5px; }
-.form-group label { font-size: .8rem; font-weight: 600; color: var(--gray-700); }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: .8rem; font-weight: 600; color: var(--gray-700); letter-spacing: .1px; }
 .form-group input, .form-group select, .form-group textarea {
-  border: 1px solid var(--gray-300); border-radius: 8px; padding: 8px 12px;
-  font-size: .85rem; outline: none; transition: border .2s; background: var(--white); color: var(--gray-900);
+  border: 1px solid var(--gray-200); border-radius: 10px; padding: 10px 14px;
+  font-size: .85rem; outline: none; transition: border .2s, box-shadow .2s; background: var(--white); color: var(--gray-900);
   font-family: inherit;
 }
 .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--blue-400); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
-.form-group textarea { resize: vertical; min-height: 70px; }
+.form-group textarea { resize: vertical; min-height: 76px; }
 .form-group input[readonly], .form-group select[disabled] { background: var(--gray-100); color: var(--gray-500); cursor: not-allowed; }
-.form-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.form-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
 
 /* ── TABLE ── */
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; border-radius: 0 0 16px 16px; width: 100%; }
 table { width: 100%; border-collapse: collapse; font-size: .83rem; }
-thead th { background: var(--blue-50); color: var(--blue-800); font-weight: 700; padding: 10px 14px; text-align: left; white-space: nowrap; border-bottom: 2px solid var(--blue-200); }
+thead th {
+  background: #07111f; color: rgba(191,219,254,.85); font-weight: 700;
+  padding: 13px 18px; text-align: left; white-space: nowrap;
+  font-size: .71rem; text-transform: uppercase; letter-spacing: .6px;
+}
+thead th:first-child { border-radius: 0; }
 tbody tr { border-bottom: 1px solid var(--gray-100); transition: background .1s; }
 tbody tr:hover { background: var(--blue-50); }
-tbody td { padding: 10px 14px; color: var(--gray-700); vertical-align: middle; }
-.no-data { text-align: center; padding: 40px; color: var(--gray-500); }
+tbody tr:last-child { border-bottom: none; }
+tbody td { padding: 12px 18px; color: var(--gray-700); vertical-align: middle; }
+.no-data { text-align: center; padding: 48px; color: var(--gray-500); font-size: .88rem; }
 
 /* ── BADGES ── */
 .badge {
-  display: inline-block; padding: 3px 9px; border-radius: 12px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+  display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: .71rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
 }
-.badge-green { background: var(--green-light); color: var(--green); }
-.badge-red { background: var(--red-light); color: var(--red); }
+.badge-green  { background: var(--green-light); color: var(--green); }
+.badge-red    { background: var(--red-light); color: var(--red); }
 .badge-yellow { background: var(--yellow-light); color: var(--yellow); }
-.badge-blue { background: var(--blue-100); color: var(--blue-700); }
+.badge-blue   { background: var(--blue-100); color: var(--blue-700); }
 .badge-purple { background: var(--purple-light); color: var(--purple); }
-.badge-gray { background: var(--gray-100); color: var(--gray-500); }
+.badge-gray   { background: var(--gray-100); color: var(--gray-500); }
 
 /* ── MODAL ── */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300;
-  display: none; align-items: center; justify-content: center; padding: 16px;
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300;
+  display: none; align-items: center; justify-content: center; padding: 20px;
 }
 .modal-overlay.open { display: flex; }
 .modal {
-  background: var(--white); border-radius: 14px; width: 100%; max-width: 620px;
-  max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  background: var(--white); border-radius: 20px; width: 100%; max-width: 640px;
+  max-height: 92vh; overflow-y: auto; box-shadow: 0 32px 80px rgba(0,0,0,.24);
 }
-.modal-header { padding: 18px 22px; border-bottom: 1px solid var(--gray-300); display: flex; align-items: center; justify-content: space-between; }
-.modal-title { font-weight: 700; font-size: 1rem; color: var(--blue-800); }
-.modal-close { background: none; border: none; cursor: pointer; color: var(--gray-500); font-size: 1.2rem; line-height: 1; padding: 2px; }
-.modal-body { padding: 22px; }
-.modal-footer { padding: 14px 22px; border-top: 1px solid var(--gray-100); display: flex; gap: 10px; justify-content: flex-end; }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; }
+.modal-title { font-weight: 800; font-size: 1rem; color: var(--blue-800); }
+.modal-close { background: none; border: none; cursor: pointer; color: var(--gray-400); font-size: 1.3rem; line-height: 1; padding: 2px; transition: color .15s; }
+.modal-close:hover { color: var(--gray-700); }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--gray-100); display: flex; gap: 10px; justify-content: flex-end; background: var(--gray-100); border-radius: 0 0 16px 16px; }
 
 /* ── FILTER BAR ── */
-.filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
-.filter-bar input, .filter-bar select { border: 1px solid var(--gray-300); border-radius: 8px; padding: 7px 12px; font-size: .83rem; outline: none; background: var(--white); }
-.filter-bar input:focus, .filter-bar select:focus { border-color: var(--blue-400); }
+.filter-bar {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 20px; background: var(--white);
+  padding: 14px 18px; border-radius: 14px; border: 1px solid var(--gray-200);
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.filter-bar input, .filter-bar select {
+  border: 1px solid var(--gray-300); border-radius: 8px; padding: 7px 12px;
+  font-size: .83rem; outline: none; background: var(--gray-100); transition: border .2s, background .2s;
+  height: 34px;
+}
+.filter-bar input:focus, .filter-bar select:focus { border-color: var(--blue-400); background: var(--white); }
 
 /* ── TABS ── */
-.tab-bar { display: flex; gap: 4px; border-bottom: 2px solid var(--gray-300); margin-bottom: 20px; overflow-x: auto; }
-.tab-btn { padding: 9px 18px; font-size: .85rem; font-weight: 600; color: var(--gray-500); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: all .15s; }
+.tab-bar { display: flex; gap: 4px; border-bottom: 2px solid var(--gray-200); margin-bottom: 24px; overflow-x: auto; }
+.tab-btn { padding: 10px 20px; font-size: .85rem; font-weight: 600; color: var(--gray-500); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: all .15s; }
 .tab-btn.active { color: var(--blue-600); border-bottom-color: var(--blue-600); }
 .tab-btn:hover:not(.active) { color: var(--blue-700); background: var(--blue-50); border-radius: 6px 6px 0 0; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
 /* ── TOAST ── */
-#toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+#toast-container { position: fixed; bottom: 28px; right: 28px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
 .toast {
-  padding: 12px 18px; border-radius: 10px; font-size: .84rem; font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0,0,0,.15); animation: slideIn .3s ease;
-  max-width: 320px; display: flex; align-items: center; gap: 8px;
+  padding: 13px 20px; border-radius: 12px; font-size: .84rem; font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18); animation: slideIn .3s ease;
+  max-width: 340px; display: flex; align-items: center; gap: 8px;
 }
 .toast-success { background: var(--green); color: var(--white); }
-.toast-error { background: var(--red); color: var(--white); }
-.toast-info { background: var(--blue-600); color: var(--white); }
+.toast-error   { background: var(--red); color: var(--white); }
+.toast-info    { background: var(--blue-600); color: var(--white); }
 @keyframes slideIn { from { transform: translateX(60px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
 /* ── CHARTS ── */
-.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-.chart-card { background: var(--white); border: 1px solid var(--gray-300); border-radius: 12px; padding: 20px; }
-.chart-card h4 { font-size: .88rem; font-weight: 700; color: var(--blue-800); margin-bottom: 14px; }
+.charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.chart-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: 16px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.chart-card h4 { font-size: .86rem; font-weight: 700; color: var(--blue-800); margin-bottom: 16px; text-transform: uppercase; letter-spacing: .4px; }
 .chart-wrap { position: relative; height: 220px; }
 
 /* ── PROGRESS ── */
-.progress-bar { height: 8px; background: var(--gray-200); border-radius: 4px; overflow: hidden; }
+.progress-bar { height: 7px; background: var(--gray-200); border-radius: 4px; overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
 
 /* ── IMPORT DROP ZONE ── */
 .drop-zone {
-  border: 2px dashed var(--blue-300); border-radius: 12px; padding: 32px;
+  border: 2px dashed var(--blue-300); border-radius: 14px; padding: 36px;
   text-align: center; cursor: pointer; transition: all .2s; background: var(--blue-50);
 }
 .drop-zone:hover, .drop-zone.dragover { border-color: var(--blue-500); background: var(--blue-100); }
-.drop-zone svg { color: var(--blue-400); margin-bottom: 12px; }
+.drop-zone svg { color: var(--blue-400); margin-bottom: 14px; }
 .drop-zone p { color: var(--blue-700); font-weight: 600; font-size: .9rem; }
 .drop-zone small { color: var(--gray-500); font-size: .78rem; }
 
@@ -397,10 +422,10 @@ tbody td { padding: 10px 14px; color: var(--gray-700); vertical-align: middle; }
 .autocomplete-wrap { position: relative; }
 .autocomplete-list {
   position: absolute; top: 100%; left: 0; right: 0; background: var(--white);
-  border: 1px solid var(--gray-300); border-top: none; border-radius: 0 0 8px 8px;
-  max-height: 180px; overflow-y: auto; z-index: 150; box-shadow: 0 6px 16px rgba(0,0,0,.1);
+  border: 1px solid var(--gray-300); border-top: none; border-radius: 0 0 10px 10px;
+  max-height: 180px; overflow-y: auto; z-index: 150; box-shadow: 0 8px 20px rgba(0,0,0,.1);
 }
-.autocomplete-list div { padding: 8px 12px; cursor: pointer; font-size: .84rem; }
+.autocomplete-list div { padding: 9px 14px; cursor: pointer; font-size: .84rem; transition: background .1s; }
 .autocomplete-list div:hover { background: var(--blue-50); color: var(--blue-700); }
 
 /* ── CALENDAR STYLES (NEW) ── */
@@ -448,7 +473,7 @@ tbody td { padding: 10px 14px; color: var(--gray-700); vertical-align: middle; }
 .cal-more { font-size: .68rem; color: var(--blue-600); font-weight: 700; cursor: pointer; }
 
 /* Calendar sidebar */
-.cal-layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+.cal-layout { display: grid; grid-template-columns: 1fr 290px; gap: 20px; }
 @media (max-width: 900px) { .cal-layout { grid-template-columns: 1fr; } }
 .cal-sidebar { display: flex; flex-direction: column; gap: 16px; }
 .cal-upcoming { background: var(--white); border: 1px solid var(--gray-300); border-radius: 12px; overflow: hidden; }
@@ -473,15 +498,16 @@ tbody td { padding: 10px 14px; color: var(--gray-700); vertical-align: middle; }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
-  #sidebar { transform: translateX(-100%); }
+  #sidebar { transform: translateX(-260px); }
   #sidebar.open { transform: translateX(0); }
   #main { margin-left: 0; }
   #menu-toggle { display: flex; }
-  #content { padding: 16px; }
+  #content { padding: 16px 16px 48px; }
   #global-search { width: 180px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .form-grid { grid-template-columns: 1fr; }
   .cal-day { min-height: 60px; }
+  .charts-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }
@@ -518,8 +544,8 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
   </div>
   <nav id="sidebar-nav">
     <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
-      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      Início
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Analytics
     </div>
     <div class="nav-item" data-page="feiraos" onclick="navigate('feiraos')">
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
@@ -537,10 +563,7 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/></svg>
       Calendário
     </div>
-    <div class="nav-item" data-page="analytics" onclick="navigate('analytics')">
-      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Analytics
-    </div>
+
     <div class="nav-item" data-page="importar" onclick="navigate('importar')">
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Importar Excel
@@ -583,39 +606,51 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
   <!-- CONTENT -->
   <main id="content">
 
-    <!-- PAGE: DASHBOARD -->
+    <!-- PAGE: DASHBOARD (unificado com Analytics) -->
     <div id="page-dashboard" class="page active">
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:1.25rem;font-weight:800;color:var(--blue-800)">Início</h2>
-        <p class="text-muted text-sm">Visão consolidada de todos os feirões e candidatos</p>
+      <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2 style="font-size:1.25rem;font-weight:800;color:var(--blue-800)">Analytics</h2>
+          <p class="text-muted text-sm">Visão consolidada de todos os feirões e candidatos</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="exportAnalyticsPDF()">PDF</button>
       </div>
+      <!-- Filtros (vindos do Analytics) -->
+      <div class="filter-bar" style="margin-bottom:20px">
+        <select id="an-feirao" onchange="renderDashboard()">
+          <option value="">Todos os Feirões</option>
+        </select>
+        <select id="an-rec" onchange="renderDashboard()">
+          <option value="">Todos os Recrutadores</option>
+        </select>
+        <select id="an-bt" onchange="renderDashboard()">
+          <option value="">Banco Talentos</option>
+          <option value="1">Apenas BT</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="clearDashFilters()">Limpar</button>
+      </div>
+      <!-- Stats -->
       <div class="stats-grid" id="dash-stats"></div>
-      <div class="charts-grid" id="dash-charts">
+      <!-- Gráficos -->
+      <div class="charts-grid" style="margin-top:20px">
         <div class="chart-card">
           <h4>Distribuição de Status</h4>
           <div class="chart-wrap"><canvas id="chartStatusDash"></canvas></div>
         </div>
         <div class="chart-card">
-          <h4>Candidatos por Feirão (Top 8)</h4>
+          <h4>Candidatos por Feirão</h4>
           <div class="chart-wrap"><canvas id="chartFeiraoDash"></canvas></div>
         </div>
-        <div class="chart-card">
-          <h4>Antecedentes</h4>
-          <div class="chart-wrap"><canvas id="chartAntDash"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h4>Recontratação</h4>
-          <div class="chart-wrap"><canvas id="chartRecontDash"></canvas></div>
-        </div>
       </div>
-      <div class="mt-4" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px" id="dash-bottom">
+      <!-- Inferior: Feirões recentes + Ranking recrutadores -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px;margin-top:24px">
         <div class="card">
           <div class="card-header"><span class="card-title">Feirões Recentes</span></div>
           <div class="card-body" id="dash-recent-feiraos"></div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Motivos de Reprovação (Top 5)</span></div>
-          <div class="card-body" id="dash-motivos"></div>
+          <div class="card-header"><span class="card-title">Ranking de Recrutadores</span></div>
+          <div class="card-body" id="an-rec-list"></div>
         </div>
       </div>
     </div>
@@ -640,8 +675,9 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
       </div>
       <div class="filter-bar">
         <input id="f-search-feirao" type="text" placeholder="Buscar por nome…" oninput="renderFeiraos()" style="min-width:180px"/>
-        <input id="f-search-recrutador" type="text" placeholder="Recrutador…" oninput="renderFeiraos()" style="min-width:150px"/>
-        <input id="f-search-cidade" type="text" placeholder="Cidade…" oninput="renderFeiraos()" style="min-width:130px"/>
+        <select id="f-search-recrutador" onchange="renderFeiraos()" style="min-width:150px">
+          <option value="">Todos os Recrutadores</option>
+        </select>
         <select id="f-status-feirao" onchange="renderFeiraos()">
           <option value="">Todos os status</option>
           <option value="ABERTO">Aberto</option>
@@ -679,6 +715,10 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="exportCandidatosExcel()">Excel</button>
           <button class="btn btn-secondary btn-sm" onclick="exportCandidatosPDF()">PDF</button>
+          <button id="btn-bulk-delete" class="btn btn-danger btn-sm" onclick="bulkDeleteCandidatos()" style="display:none">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            Excluir Selecionados (<span id="bulk-count">0</span>)
+          </button>
           <button class="btn btn-primary btn-sm" onclick="openCandModal()">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Novo Candidato
@@ -690,7 +730,9 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
           <option value="">Todos os Feirões</option>
         </select>
         <input id="f-nome-cand" type="text" placeholder="Nome / CPF / CR…" oninput="renderCandidatos()" style="min-width:180px"/>
-        <input id="f-rec-cand" type="text" placeholder="Recrutador…" oninput="renderCandidatos()"/>
+        <select id="f-rec-cand" onchange="renderCandidatos()">
+          <option value="">Todos os Recrutadores</option>
+        </select>
         <select id="f-status-cand" onchange="renderCandidatos()">
           <option value="">Todos os status</option>
           <option value="APROVADO">Aprovado</option>
@@ -708,6 +750,12 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
           <option value="1">Sim</option>
           <option value="0">Não</option>
         </select>
+        <select id="f-recont-cand" onchange="renderCandidatos()">
+          <option value="">Ex-Colaborador</option>
+          <option value="NUNCA_TRABALHOU_NA_GPS">Nunca GPS</option>
+          <option value="APROVADO">Aprovado</option>
+          <option value="REPROVADO">Reprovado</option>
+        </select>
         <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
       </div>
       <div class="card">
@@ -715,6 +763,7 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
           <table>
             <thead>
               <tr>
+                <th style="width:36px"><input type="checkbox" id="cand-check-all" onclick="toggleAllCandidatos(this)" style="cursor:pointer;width:15px;height:15px"/></th>
                 <th>Nome</th>
                 <th>CPF</th>
                 <th>CR</th>
@@ -746,13 +795,13 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
         </div>
       </div>
       <div class="filter-bar">
-        <input id="f-bt-nome" type="text" placeholder="Nome / CPF / CR…" oninput="renderTalentos()" style="min-width:180px"/>
+        <input id="f-bt-nome" type="text" placeholder="Nome / CPF…" oninput="renderTalentos()" style="min-width:180px"/>
         <select id="f-bt-feirao" onchange="renderTalentos()">
           <option value="">Todos os Feirões</option>
         </select>
-        <input id="f-bt-cidade" type="text" placeholder="Cidade de origem…" oninput="renderTalentos()"/>
-        <input id="f-bt-rec" type="text" placeholder="Recrutador…" oninput="renderTalentos()"/>
-        <input id="f-bt-cr" type="text" placeholder="CR…" oninput="renderTalentos()"/>
+        <select id="f-bt-rec" onchange="renderTalentos()">
+          <option value="">Todos os Recrutadores</option>
+        </select>
         <button class="btn btn-secondary btn-sm" onclick="clearBTFilters()">Limpar</button>
       </div>
       <div class="card">
@@ -846,79 +895,27 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
             </div>
           </div>
 
-          <!-- Quick stats -->
-          <div class="card">
-            <div class="card-header"><span class="card-title">Resumo do Mês</span></div>
-            <div class="card-body" id="cal-month-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px"></div>
-          </div>
-
           <!-- Feiroes sync info -->
           <div class="card">
             <div class="card-header"><span class="card-title">🔗 Feirões Sincronizados</span></div>
             <div class="card-body" id="cal-feiraos-sync" style="padding:14px"></div>
           </div>
 
-          <!-- Ranking de Recrutadores -->
+          <!-- Ranking + Taxa unificados em abas -->
           <div class="card">
-            <div class="card-header"><span class="card-title">🏆 Ranking de Recrutadores</span></div>
+            <div class="card-header" style="gap:0;padding:0">
+              <button id="cal-tab-ranking" onclick="calTabSwitch('ranking')"
+                style="flex:1;padding:12px 16px;font-size:.82rem;font-weight:700;background:var(--blue-700);color:#fff;border:none;cursor:pointer;border-radius:0;transition:background .15s">
+                🏆 Ranking
+              </button>
+              <button id="cal-tab-taxa" onclick="calTabSwitch('taxa')"
+                style="flex:1;padding:12px 16px;font-size:.82rem;font-weight:700;background:var(--gray-100);color:var(--gray-700);border:none;cursor:pointer;border-radius:0;transition:background .15s">
+                ✅ Taxa Aprovação
+              </button>
+            </div>
             <div class="card-body" id="cal-ranking-rec" style="padding:14px"></div>
+            <div class="card-body" id="cal-taxa-rec" style="padding:14px;display:none"></div>
           </div>
-
-          <!-- Taxa de Aprovação por Recrutador -->
-          <div class="card">
-            <div class="card-header"><span class="card-title">✅ Taxa de Aprovação por Recrutador</span></div>
-            <div class="card-body" id="cal-taxa-rec" style="padding:14px"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- PAGE: ANALYTICS -->
-    <div id="page-analytics" class="page">
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">Analytics Center</h2>
-        <p class="text-muted text-sm">Métricas e indicadores de desempenho</p>
-      </div>
-      <div class="filter-bar" style="margin-bottom:20px">
-        <select id="an-feirao" onchange="renderAnalytics()">
-          <option value="">Todos os Feirões</option>
-        </select>
-        <input id="an-cidade" type="text" placeholder="Cidade…" oninput="renderAnalytics()"/>
-        <input id="an-rec" type="text" placeholder="Recrutador…" oninput="renderAnalytics()"/>
-        <select id="an-bt" onchange="renderAnalytics()">
-          <option value="">Banco Talentos</option>
-          <option value="1">Apenas BT</option>
-        </select>
-        <button class="btn btn-secondary btn-sm" onclick="clearAnFilters();renderAnalytics()">Limpar</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportAnalyticsPDF()">PDF</button>
-      </div>
-      <div class="stats-grid" id="an-stats"></div>
-      <div class="charts-grid" style="margin-top:20px">
-        <div class="chart-card">
-          <h4>Distribuição de Status</h4>
-          <div class="chart-wrap"><canvas id="chartAnStatus"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h4>Antecedentes</h4>
-          <div class="chart-wrap"><canvas id="chartAnAnt"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h4>Candidatos por Feirão</h4>
-          <div class="chart-wrap"><canvas id="chartAnFeirao"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h4>Top 10 CRs</h4>
-          <div class="chart-wrap"><canvas id="chartAnCR"></canvas></div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px" id="an-bottom">
-        <div class="chart-card">
-          <h4>Motivos de Reprovação</h4>
-          <div id="an-motivos-list"></div>
-        </div>
-        <div class="chart-card">
-          <h4>Ranking de Recrutadores</h4>
-          <div id="an-rec-list"></div>
         </div>
       </div>
     </div>
@@ -929,7 +926,7 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
         <h2 style="font-size:1.2rem;font-weight:800;color:var(--blue-800)">Importar Excel</h2>
         <p class="text-muted text-sm">Importe candidatos via planilha .xlsx com validação automática</p>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="import-grid">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px" class="import-grid">
         <div class="card">
           <div class="card-header"><span class="card-title">Configuração da Importação</span></div>
           <div class="card-body">
@@ -1406,15 +1403,15 @@ async function seedIfEmpty() {
 // ═══════════════════════════════════════
 function applyRuleEngine(c) {
   if (c.antecedentes === 'REPROVADO') c.statusProcesso = 'REPROVADO';
-  c.bancoTalentosFlag = c.statusProcesso === 'BANCO_TALENTOS';
+  c.bancoTalentosFlag = c.bancoTalentosFlag || c.statusProcesso === 'BANCO_TALENTOS';
 }
 
 // ═══════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════
 const pageNames = {
-  dashboard: 'Início', feiraos: 'Feirões de Emprego', candidatos: 'Candidatos',
-  talentos: 'Banco de Talentos', calendario: 'Calendário', analytics: 'Analytics',
+  dashboard: 'Analytics', feiraos: 'Feirões de Emprego', candidatos: 'Candidatos',
+  talentos: 'Banco de Talentos', calendario: 'Calendário',
   importar: 'Importar Excel', recrutadores: 'Recrutadores',
 };
 let currentPage = 'dashboard';
@@ -1430,12 +1427,11 @@ function navigate(page) {
 }
 
 function refreshPage(page) {
-  if(page==='dashboard') renderDashboard();
-  if(page==='feiraos') renderFeiraos();
-  if(page==='candidatos') { populateFeiraoSelects(); renderCandidatos(); }
-  if(page==='talentos') { populateFeiraoSelects(); renderTalentos(); }
+  if(page==='dashboard') { populateFeiraoSelects(); populateAnRecSelect(); renderDashboard(); }
+  if(page==='feiraos') { populateAnRecSelect(); renderFeiraos(); }
+  if(page==='candidatos') { populateFeiraoSelects(); populateAnRecSelect(); renderCandidatos(); }
+  if(page==='talentos') { populateFeiraoSelects(); populateAnRecSelect(); renderTalentos(); }
   if(page==='calendario') { populateFeiraoSelects(); renderCalendar(); }
-  if(page==='analytics') { populateFeiraoSelects(); renderAnalytics(); }
   if(page==='importar') populateFeiraoSelects();
   if(page==='recrutadores') renderRecrutadores();
 }
@@ -1487,6 +1483,22 @@ function populateFeiraoSelects() {
     feiraos.forEach(f => {
       const o = document.createElement('option');
       o.value = f.id; o.textContent = f.nomeFeirao;
+      sel.appendChild(o);
+    });
+    if(val) sel.value = val;
+  });
+}
+
+function populateAnRecSelect() {
+  const recIds = ['an-rec','f-search-recrutador','f-rec-cand','f-bt-rec'];
+  recIds.forEach(id => {
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const val = sel.value;
+    sel.innerHTML = sel.options[0].outerHTML; // mantém a primeira opção (Todos…)
+    DB.recrutadores().forEach(r => {
+      const o = document.createElement('option');
+      o.value = r.id; o.textContent = r.nome;
       sel.appendChild(o);
     });
     if(val) sel.value = val;
@@ -1655,13 +1667,11 @@ function renderFeiraos() {
   const feiraos = DB.feiraos();
   const cands = DB.candidatos();
   const q = normStr(document.getElementById('f-search-feirao')?.value||'');
-  const qr = normStr(document.getElementById('f-search-recrutador')?.value||'');
-  const qc = normStr(document.getElementById('f-search-cidade')?.value||'');
+  const qr = document.getElementById('f-search-recrutador')?.value||'';
   const qs = document.getElementById('f-status-feirao')?.value||'';
   let list = feiraos.filter(f =>
     (!q || normStr(f.nomeFeirao).includes(q)) &&
-    (!qr || normStr(f.recrutadorNome).includes(qr)) &&
-    (!qc || normStr(f.localEvento).includes(qc)) &&
+    (!qr || f.recrutadorId===qr || f.recrutadorNome===qr) &&
     (!qs || f.statusFeirao===qs)
   );
   document.getElementById('feiraos-count-label').textContent = `${list.length} feirão(ões) encontrado(s)`;
@@ -1690,7 +1700,8 @@ function renderFeiraos() {
 }
 
 function clearFeiraFilters() {
-  ['f-search-feirao','f-search-recrutador','f-search-cidade'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-search-feirao').value='';
+  document.getElementById('f-search-recrutador').value='';
   document.getElementById('f-status-feirao').value='';
   renderFeiraos();
 }
@@ -1819,17 +1830,19 @@ function getFilteredCandidatos() {
   let cands = DB.candidatos();
   const fid = document.getElementById('f-feirao-cand')?.value||'';
   const q = normStr(document.getElementById('f-nome-cand')?.value||'');
-  const qr = normStr(document.getElementById('f-rec-cand')?.value||'');
+  const qr = document.getElementById('f-rec-cand')?.value||'';
   const qs = document.getElementById('f-status-cand')?.value||'';
   const qa = document.getElementById('f-ant-cand')?.value||'';
   const qbt = document.getElementById('f-bt-cand')?.value||'';
+  const qrecont = document.getElementById('f-recont-cand')?.value||'';
   return cands.filter(c =>
     (!fid || c.feiraoId===fid) &&
     (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)||normStr(c.cr).includes(q)) &&
-    (!qr || normStr(c.recrutadorNome).includes(qr)) &&
+    (!qr || c.recrutadorId===qr) &&
     (!qs || c.statusProcesso===qs) &&
     (!qa || c.antecedentes===qa) &&
-    (!qbt || (qbt==='1'? c.bancoTalentosFlag : !c.bancoTalentosFlag))
+    (!qbt || (qbt==='1'? c.bancoTalentosFlag : !c.bancoTalentosFlag)) &&
+    (!qrecont || c.recontratacao===qrecont)
   );
 }
 
@@ -1837,8 +1850,9 @@ function renderCandidatos() {
   const list = getFilteredCandidatos();
   document.getElementById('cand-count-label').textContent = `${list.length} candidato(s) encontrado(s)`;
   const tbody = document.getElementById('candidatos-tbody');
-  if(!list.length){tbody.innerHTML=`<tr><td colspan="10" class="no-data">Nenhum candidato encontrado</td></tr>`;return;}
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="11" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();return;}
   tbody.innerHTML = list.map(c => `<tr>
+    <td><input type="checkbox" class="cand-chk" data-id="${c.id}" onclick="updateBulkBar()" style="cursor:pointer;width:15px;height:15px"/></td>
     <td><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')">${esc(c.nome)}</strong>${c.bancoTalentosFlag?'<span class="tag-bt" style="margin-left:5px">BT</span>':''}</td>
     <td>${esc(c.cpf)}</td>
     <td>${esc(c.cr)||'—'}</td>
@@ -1855,12 +1869,43 @@ function renderCandidatos() {
       </div>
     </td>
   </tr>`).join('');
+  updateBulkBar();
 }
 
 function clearCandFilters() {
-  ['f-nome-cand','f-rec-cand'].forEach(id=>document.getElementById(id).value='');
-  ['f-feirao-cand','f-status-cand','f-ant-cand','f-bt-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-nome-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-bt-cand','f-recont-cand'].forEach(id=>document.getElementById(id).value='');
   renderCandidatos();
+}
+
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.cand-chk:checked');
+  const total   = document.querySelectorAll('.cand-chk');
+  const btn  = document.getElementById('btn-bulk-delete');
+  const count= document.getElementById('bulk-count');
+  const chkAll = document.getElementById('cand-check-all');
+  if(btn)  btn.style.display = checked.length > 0 ? '' : 'none';
+  if(count) count.textContent = checked.length;
+  if(chkAll) {
+    chkAll.indeterminate = checked.length > 0 && checked.length < total.length;
+    chkAll.checked = total.length > 0 && checked.length === total.length;
+  }
+}
+
+function toggleAllCandidatos(chk) {
+  document.querySelectorAll('.cand-chk').forEach(c => c.checked = chk.checked);
+  updateBulkBar();
+}
+
+function bulkDeleteCandidatos() {
+  const ids = [...document.querySelectorAll('.cand-chk:checked')].map(c => c.dataset.id);
+  if(!ids.length) return;
+  confirm_(`Excluir ${ids.length} candidato(s) selecionado(s)? Essa ação não pode ser desfeita.`, async () => {
+    const idSet = new Set(ids);
+    await DB.saveCandidatos(DB.candidatos().filter(c => !idSet.has(c.id)));
+    toast(`${ids.length} candidato(s) excluído(s)!`, 'success');
+    renderCandidatos();
+  });
 }
 
 // ═══════════════════════════════════════
@@ -1870,15 +1915,11 @@ function renderTalentos() {
   const cands = DB.candidatos().filter(c=>c.bancoTalentosFlag);
   const q = normStr(document.getElementById('f-bt-nome')?.value||'');
   const fid = document.getElementById('f-bt-feirao')?.value||'';
-  const qc = normStr(document.getElementById('f-bt-cidade')?.value||'');
-  const qr = normStr(document.getElementById('f-bt-rec')?.value||'');
-  const qcr = normStr(document.getElementById('f-bt-cr')?.value||'');
+  const qr = document.getElementById('f-bt-rec')?.value||'';
   let list = cands.filter(c =>
-    (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)||normStr(c.cr).includes(q)) &&
+    (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)) &&
     (!fid || c.feiraoId===fid) &&
-    (!qc || normStr(c.feiraoLocal||'').includes(qc)) &&
-    (!qr || normStr(c.recrutadorNome).includes(qr)) &&
-    (!qcr || normStr(c.cr||'').includes(qcr))
+    (!qr || c.recrutadorId===qr)
   );
   document.getElementById('bt-count-label').textContent = `${list.length} talento(s) no banco global`;
   const tbody = document.getElementById('talentos-tbody');
@@ -1896,8 +1937,9 @@ function renderTalentos() {
 }
 
 function clearBTFilters() {
-  ['f-bt-nome','f-bt-cidade','f-bt-rec','f-bt-cr'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-bt-nome').value='';
   document.getElementById('f-bt-feirao').value='';
+  document.getElementById('f-bt-rec').value='';
   renderTalentos();
 }
 
@@ -1988,92 +2030,42 @@ function renderRecrutadores() {
 // ═══════════════════════════════════════
 let dashCharts = {};
 function renderDashboard() {
-  const cands = DB.candidatos();
+  let cands = DB.candidatos();
   const feiraos = DB.feiraos();
-  const bt = cands.filter(c=>c.bancoTalentosFlag).length;
-  const aprov = cands.filter(c=>c.statusProcesso==='APROVADO').length;
+  // Aplica filtros (mesmos do antigo Analytics)
+  const fid = document.getElementById('an-feirao')?.value||'';
+  const qr  = document.getElementById('an-rec')?.value||'';
+  const qbt = document.getElementById('an-bt')?.value||'';
+  cands = cands.filter(c=>(!fid||c.feiraoId===fid)&&(!qr||c.recrutadorId===qr)&&(!qbt||c.bancoTalentosFlag));
+
+  const total  = cands.length;
+  const aprov  = cands.filter(c=>c.statusProcesso==='APROVADO').length;
   const reprov = cands.filter(c=>c.statusProcesso==='REPROVADO').length;
-  const analise = cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
-  const taxa = cands.length ? Math.round(aprov/cands.length*100) : 0;
+  const analise= cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const bt     = cands.filter(c=>c.bancoTalentosFlag).length;
+  const taxa   = total ? Math.round(aprov/total*100) : 0;
+
   document.getElementById('dash-stats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Total Candidatos</div><div class="stat-value">${cands.length}</div><div class="stat-sub">${feiraos.length} feirão(ões)</div></div>
+    <div class="stat-card"><div class="stat-label">Total Candidatos</div><div class="stat-value">${total}</div><div class="stat-sub">${feiraos.length} feirão(ões)</div></div>
     <div class="stat-card green"><div class="stat-label">Aprovados</div><div class="stat-value">${aprov}</div><div class="stat-sub">Taxa: ${taxa}%</div></div>
-    <div class="stat-card red"><div class="stat-label">Reprovados</div><div class="stat-value">${reprov}</div><div class="stat-sub">${cands.length?Math.round(reprov/cands.length*100):0}% do total</div></div>
-    <div class="stat-card yellow"><div class="stat-label">Em Análise</div><div class="stat-value">${analise}</div><div class="stat-sub"></div></div>
+    <div class="stat-card red"><div class="stat-label">Reprovados</div><div class="stat-value">${reprov}</div><div class="stat-sub">${total?Math.round(reprov/total*100):0}% do total</div></div>
+    <div class="stat-card yellow"><div class="stat-label">Em Análise</div><div class="stat-value">${analise}</div></div>
     <div class="stat-card purple"><div class="stat-label">Banco Talentos</div><div class="stat-value">${bt}</div><div class="stat-sub">Talentos globais</div></div>
     <div class="stat-card"><div class="stat-label">Feirões Abertos</div><div class="stat-value">${feiraos.filter(f=>f.statusFeirao==='ABERTO').length}</div><div class="stat-sub">de ${feiraos.length} total</div></div>
   `;
   renderDonut('chartStatusDash', dashCharts, 'chartStatusDash', ['Aprovado','Reprovado','Em Análise','Banco Talentos'], [aprov,reprov,analise,bt], ['#16a34a','#dc2626','#ca8a04','#7c3aed']);
-  const byF = feiraos.slice(0,8).map(f=>({label:f.nomeFeirao.substring(0,20)+'…', val:cands.filter(c=>c.feiraoId===f.id).length}));
+  const byF = feiraos.map(f=>({label:f.nomeFeirao.substring(0,18),val:cands.filter(c=>c.feiraoId===f.id).length})).filter(x=>x.val>0).slice(0,10);
   renderBar('chartFeiraoDash', dashCharts, 'chartFeiraoDash', byF.map(x=>x.label), byF.map(x=>x.val), 'var(--blue-500)');
-  const antA = cands.filter(c=>c.antecedentes==='APROVADO').length;
-  const antR = cands.filter(c=>c.antecedentes==='REPROVADO').length;
-  renderDonut('chartAntDash', dashCharts, 'chartAntDash', ['Aprovado','Reprovado'],[antA,antR],['#16a34a','#dc2626']);
-  const rNev = cands.filter(c=>c.recontratacao==='NUNCA_TRABALHOU_NA_GPS').length;
-  const rAp = cands.filter(c=>c.recontratacao==='APROVADO').length;
-  const rRp = cands.filter(c=>c.recontratacao==='REPROVADO').length;
-  renderDonut('chartRecontDash', dashCharts, 'chartRecontDash', ['Nunca GPS','Aprovado','Reprovado'],[rNev,rAp,rRp],['#3b82f6','#16a34a','#dc2626']);
+  // Feirões recentes (sem filtro de candidatos)
   const sorted = [...feiraos].sort((a,b)=>b.dataEvento?.localeCompare(a.dataEvento)||0).slice(0,5);
   document.getElementById('dash-recent-feiraos').innerHTML = sorted.length ? sorted.map(f=>`
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100)">
       <div><p style="font-weight:600;font-size:.85rem">${esc(f.nomeFeirao)}</p><p class="text-muted text-sm">${esc(f.localEvento)} · ${f.dataEvento?fmt(f.dataEvento):'—'}</p></div>
       ${f.statusFeirao==='ABERTO'?'<span class="badge badge-green">Aberto</span>':'<span class="badge badge-gray">Encerrado</span>'}
     </div>`).join('') : '<p class="text-muted text-sm">Nenhum feirão cadastrado</p>';
-  const motCounts = {};
-  cands.forEach(c=>{if(c.motivoReprovacao){const k=c.motivoReprovacao.trim();motCounts[k]=(motCounts[k]||0)+1;}});
-  const motList = Object.entries(motCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const maxM = motList[0]?.[1]||1;
-  document.getElementById('dash-motivos').innerHTML = motList.length ? motList.map(([m,n])=>`
-    <div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:.82rem;font-weight:600">${esc(m)}</span><span class="badge badge-red">${n}</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(n/maxM*100)}%;background:var(--red)"></div></div>
-    </div>`).join('') : '<p class="text-muted text-sm">Nenhum motivo registrado</p>';
-}
-
-// ═══════════════════════════════════════
-// ANALYTICS
-// ═══════════════════════════════════════
-let anCharts = {};
-function renderAnalytics() {
-  let cands = DB.candidatos();
-  const feiraos = DB.feiraos();
-  const fid = document.getElementById('an-feirao')?.value||'';
-  const qc = normStr(document.getElementById('an-cidade')?.value||'');
-  const qr = normStr(document.getElementById('an-rec')?.value||'');
-  const qbt = document.getElementById('an-bt')?.value||'';
-  cands = cands.filter(c=>(!fid||c.feiraoId===fid)&&(!qc||normStr(c.feiraoLocal||'').includes(qc))&&(!qr||normStr(c.recrutadorNome).includes(qr))&&(!qbt||c.bancoTalentosFlag));
-  const total=cands.length, aprov=cands.filter(c=>c.statusProcesso==='APROVADO').length;
-  const reprov=cands.filter(c=>c.statusProcesso==='REPROVADO').length;
-  const analise=cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
-  const bt=cands.filter(c=>c.bancoTalentosFlag).length;
-  const taxa=total?Math.round(aprov/total*100):0;
-  document.getElementById('an-stats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">${total}</div></div>
-    <div class="stat-card green"><div class="stat-label">Aprovados</div><div class="stat-value">${aprov}</div><div class="stat-sub">${taxa}%</div></div>
-    <div class="stat-card red"><div class="stat-label">Reprovados</div><div class="stat-value">${reprov}</div><div class="stat-sub">${total?Math.round(reprov/total*100):0}%</div></div>
-    <div class="stat-card yellow"><div class="stat-label">Em Análise</div><div class="stat-value">${analise}</div></div>
-    <div class="stat-card purple"><div class="stat-label">Banco Talentos</div><div class="stat-value">${bt}</div></div>
-  `;
-  renderDonut('chartAnStatus',anCharts,'chartAnStatus',['Aprovado','Reprovado','Em Análise','BT'],[aprov,reprov,analise,bt],['#16a34a','#dc2626','#ca8a04','#7c3aed']);
-  const antA=cands.filter(c=>c.antecedentes==='APROVADO').length, antR=cands.filter(c=>c.antecedentes==='REPROVADO').length;
-  renderDonut('chartAnAnt',anCharts,'chartAnAnt',['Aprovado','Reprovado'],[antA,antR],['#16a34a','#dc2626']);
-  const byF=feiraos.map(f=>({l:f.nomeFeirao.substring(0,18),v:cands.filter(c=>c.feiraoId===f.id).length})).filter(x=>x.v>0).slice(0,10);
-  renderBar('chartAnFeirao',anCharts,'chartAnFeirao',byF.map(x=>x.l),byF.map(x=>x.v),'var(--blue-500)');
-  const crMap={};
-  cands.forEach(c=>{if(c.cr){const k=c.cr.trim();crMap[k]=(crMap[k]||0)+1;}});
-  const crList=Object.entries(crMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  renderBar('chartAnCR',anCharts,'chartAnCR',crList.map(x=>x[0]),crList.map(x=>x[1]),'var(--purple)');
-  const motCounts={};
-  cands.forEach(c=>{if(c.motivoReprovacao){const k=c.motivoReprovacao.trim();motCounts[k]=(motCounts[k]||0)+1;}});
-  const motList=Object.entries(motCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const maxM=motList[0]?.[1]||1;
-  document.getElementById('an-motivos-list').innerHTML=motList.length?motList.map(([m,n])=>`
-    <div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:.82rem">${esc(m)}</span><span class="badge badge-red">${n}</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(n/maxM*100)}%;background:var(--red)"></div></div>
-    </div>`).join(''):'<p class="text-muted text-sm">Nenhum motivo registrado</p>';
+  // Ranking de recrutadores (com filtro aplicado)
   const recCounts={};
-  cands.forEach(c=>{const k=c.recrutadorNome;recCounts[k]=(recCounts[k]||{total:0,aprov:0});recCounts[k].total++;if(c.statusProcesso==='APROVADO')recCounts[k].aprov++;});
+  cands.forEach(c=>{const k=c.recrutadorNome;if(!k)return;recCounts[k]=(recCounts[k]||{total:0,aprov:0});recCounts[k].total++;if(c.statusProcesso==='APROVADO')recCounts[k].aprov++;});
   const recList=Object.entries(recCounts).sort((a,b)=>b[1].total-a[1].total).slice(0,8);
   const maxR=recList[0]?.[1]?.total||1;
   document.getElementById('an-rec-list').innerHTML=recList.length?recList.map(([r,d])=>`
@@ -2086,11 +2078,11 @@ function renderAnalytics() {
     </div>`).join(''):'<p class="text-muted text-sm">Nenhum dado</p>';
 }
 
-function clearAnFilters() {
+function clearDashFilters() {
   document.getElementById('an-feirao').value='';
-  document.getElementById('an-cidade').value='';
   document.getElementById('an-rec').value='';
   document.getElementById('an-bt').value='';
+  renderDashboard();
 }
 
 // ═══════════════════════════════════════
@@ -2234,7 +2226,7 @@ async function confirmImport() {
       motivoReprovacao:String(r.motivoReprovacao||r.motivo||'').trim(),
       observacoes:String(r.observacoes||r.Observacoes||'').trim(),
       recrutadorId:f.recrutadorId, recrutadorNome:f.recrutadorNome,
-      bancoTalentosFlag: normStr(String(r.bancoTalentos||r.BancoTalentos||r.banco_talentos||r['Banco Talentos']||'')).startsWith('s'),
+      bancoTalentosFlag: ['s','sim','yes','1','true'].includes(normStr(String(r.bancoTalentos||r.BancoTalentos||r.banco_talentos||r['Banco Talentos']||''))),
     };
     applyRuleEngine(c);
     cands.push(c);
@@ -2252,13 +2244,12 @@ async function confirmImport() {
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ['nome','cpf','telefone','cr','statusProcesso','antecedentes','recontratacao','motivoReprovacao','observacoes','bancoTalentos'],
-    ['João Silva','123.456.789-00','(11) 91234-5678','CR-001','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','','','NAO'],
-    ['Maria Souza','987.654.321-00','(11) 98765-4321','CR-002','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','','','SIM'],
+    ['nome','cpf','telefone','cr','statusProcesso','antecedentes','recontratacao','bancoTalentos'],
+    ['João Silva','123.456.789-00','(11) 91234-5678','CR-001','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','NÃO'],
+    ['Maria Souza','987.654.321-00','(11) 98765-4321','CR-002','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','SIM'],
   ]);
-  // Largura das colunas para melhor leitura
   ws['!cols'] = [
-    {wch:22},{wch:16},{wch:18},{wch:10},{wch:18},{wch:14},{wch:26},{wch:22},{wch:22},{wch:14}
+    {wch:22},{wch:16},{wch:18},{wch:10},{wch:18},{wch:14},{wch:26},{wch:12}
   ];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
   XLSX.writeFile(wb,'modelo_candidatos_gps.xlsx');
@@ -2449,7 +2440,6 @@ function renderCalendar() {
   else renderCalAgendaView();
 
   renderCalUpcoming();
-  renderCalMonthStats();
   renderCalFeiraoSync();
   renderCalRankingRec();
   renderCalTaxaRec();
@@ -2575,30 +2565,16 @@ function renderCalUpcoming() {
   }).join('');
 }
 
-function renderCalMonthStats() {
-  const eventos = getAllExpandedEvents();
-  const pad = n => String(n).padStart(2,'0');
-  const monthStr = `${calYear}-${pad(calMonth+1)}`;
-  const monthEvs = eventos.filter(e => e.dataIni.startsWith(monthStr));
-  const nFeiraos = monthEvs.filter(e => e.tipo === 'feirao').length;
-  const nEntrevistas = monthEvs.filter(e => e.tipo === 'entrevista').length;
-  const el = document.getElementById('cal-month-stats');
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;padding:4px 0">
-      <span style="font-size:1.6rem">🏢</span>
-      <div>
-        <div style="font-weight:800;font-size:1.3rem;color:var(--blue-700);line-height:1">${nFeiraos}</div>
-        <div class="text-muted" style="font-size:.75rem;margin-top:2px">Feirão(ões) no mês</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;padding:4px 0">
-      <span style="font-size:1.6rem">👤</span>
-      <div>
-        <div style="font-weight:800;font-size:1.3rem;color:var(--green);line-height:1">${nEntrevistas}</div>
-        <div class="text-muted" style="font-size:.75rem;margin-top:2px">Entrevista(s) no mês</div>
-      </div>
-    </div>
-  `;
+function calTabSwitch(tab) {
+  const isRanking = tab === 'ranking';
+  document.getElementById('cal-ranking-rec').style.display = isRanking ? 'block' : 'none';
+  document.getElementById('cal-taxa-rec').style.display   = isRanking ? 'none'  : 'block';
+  const btnR = document.getElementById('cal-tab-ranking');
+  const btnT = document.getElementById('cal-tab-taxa');
+  btnR.style.background = isRanking ? 'var(--blue-700)' : 'var(--gray-100)';
+  btnR.style.color      = isRanking ? '#fff' : 'var(--gray-700)';
+  btnT.style.background = isRanking ? 'var(--gray-100)' : 'var(--blue-700)';
+  btnT.style.color      = isRanking ? 'var(--gray-700)' : '#fff';
 }
 
 function renderCalFeiraoSync() {
@@ -2899,10 +2875,12 @@ async function initApp() {
   window._appReady = true;
   await seedIfEmpty();
   populateFeiraoSelects();
+  populateAnRecSelect();
   renderDashboard();
 }
 
 initApp();
 </script>
 </body>
+</html>
 </html>
