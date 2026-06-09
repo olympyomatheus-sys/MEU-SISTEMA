@@ -847,16 +847,12 @@ thead th {
           <option value="APROVADO">Aprovado</option>
           <option value="REPROVADO">Reprovado</option>
           <option value="EM_ANALISE">Em Análise</option>
+          <option value="BANCO_TALENTOS">⭐ Banco de Talentos</option>
         </select>
         <select id="f-ant-cand" onchange="renderCandidatos()">
           <option value="">Antecedentes</option>
           <option value="APROVADO">Aprovado</option>
           <option value="REPROVADO">Reprovado</option>
-        </select>
-        <select id="f-bt-cand" onchange="renderCandidatos()">
-          <option value="">Banco Talentos</option>
-          <option value="1">Sim</option>
-          <option value="0">Não</option>
         </select>
         <select id="f-recont-cand" onchange="renderCandidatos()">
           <option value="">Ex-Colaborador</option>
@@ -887,7 +883,6 @@ thead th {
                 <th>Antecedentes</th>
                 <th>Ex-Colaborador</th>
                 <th>Admitido</th>
-                <th>BT</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -1220,12 +1215,12 @@ thead th {
         </div>
         <div class="form-group">
           <label>Status do Processo *</label>
-          <select id="mc-status">
+          <select id="mc-status" onchange="toggleMotivoField();onStatusChange()">
             <option value="">Selecione…</option>
             <option value="APROVADO">Aprovado</option>
             <option value="REPROVADO">Reprovado</option>
             <option value="EM_ANALISE">Em Análise</option>
-            <option value="BANCO_TALENTOS">Banco de Talentos</option>
+            <option value="BANCO_TALENTOS">⭐ Banco de Talentos</option>
           </select>
         </div>
         <div class="form-group">
@@ -1544,7 +1539,10 @@ async function seedIfEmpty() {
 // ═══════════════════════════════════════
 function applyRuleEngine(c) {
   if (c.antecedentes === 'REPROVADO') c.statusProcesso = 'REPROVADO';
-  c.bancoTalentosFlag = c.bancoTalentosFlag || c.statusProcesso === 'BANCO_TALENTOS';
+  // Banco de Talentos bloqueado se houver qualquer reprovação
+  const temReprovacao = c.statusProcesso === 'REPROVADO' || c.antecedentes === 'REPROVADO' || c.recontratacao === 'REPROVADO';
+  if (temReprovacao && c.statusProcesso === 'BANCO_TALENTOS') c.statusProcesso = 'REPROVADO';
+  c.bancoTalentosFlag = c.statusProcesso === 'BANCO_TALENTOS' && !temReprovacao;
 }
 
 // ═══════════════════════════════════════
@@ -1897,11 +1895,39 @@ function onFeiraoCandChange() {
 function toggleMotivoField() {
   const status = document.getElementById('mc-status').value;
   const ant = document.getElementById('mc-ant').value;
+  const recont = document.getElementById('mc-recont').value;
   const wrap = document.getElementById('mc-motivo-wrap');
   wrap.style.display = (status==='REPROVADO'||ant==='REPROVADO') ? 'flex' : 'none';
+
+  const temReprovacao = status==='REPROVADO' || ant==='REPROVADO' || recont==='REPROVADO';
+  const isBT = status==='BANCO_TALENTOS';
+
+  // Bloqueia opção BT no status se houver qualquer reprovação
+  const mcStatus = document.getElementById('mc-status');
+  const btOpt = mcStatus.querySelector('option[value="BANCO_TALENTOS"]');
+  if(btOpt) btOpt.disabled = temReprovacao;
+
+  // Bloqueia opção Reprovado no Ex-Colaborador se status for BT
+  const mcRecont = document.getElementById('mc-recont');
+  const recontReprovOpt = mcRecont.querySelector('option[value="REPROVADO"]');
+  if(recontReprovOpt) recontReprovOpt.disabled = isBT;
+
+  // Se BT estava selecionado e agora tem reprovação → muda para Reprovado e avisa
+  if(temReprovacao && mcStatus.value === 'BANCO_TALENTOS') {
+    mcStatus.value = 'REPROVADO';
+    toast('Banco de Talentos indisponível para candidatos com reprovação.', 'error');
+  }
+
+  // Se Ex-Colaborador era Reprovado e status mudou para BT → limpa o campo e avisa
+  if(isBT && mcRecont.value === 'REPROVADO') {
+    mcRecont.value = '';
+    toast('Ex-Colaborador Reprovado não é permitido no Banco de Talentos.', 'error');
+  }
 }
+function onStatusChange() {}
 document.getElementById('mc-status').addEventListener('change', toggleMotivoField);
 document.getElementById('mc-ant').addEventListener('change', toggleMotivoField);
+document.getElementById('mc-recont').addEventListener('change', toggleMotivoField);
 
 async function saveCandidato() {
   const fid = document.getElementById('mc-feirao').value;
@@ -1924,6 +1950,10 @@ async function saveCandidato() {
   if(!status){toast('Status do processo é obrigatório','error');return;}
   if(!ant){toast('Antecedentes é obrigatório','error');return;}
   if(!recont){toast('Pesquisa de Ex-Colaborador é obrigatória','error');return;}
+  // Bloqueia BT se houver qualquer reprovação
+  if(status === 'BANCO_TALENTOS' && (ant==='REPROVADO' || recont==='REPROVADO')) {
+    toast('Banco de Talentos não permitido para candidatos com reprovação.','error');return;
+  }
   const f = DB.feiraos().find(x=>x.id===fid);
   if(!f){toast('Feirão não encontrado','error');return;}
   let cands = DB.candidatos();
@@ -1993,7 +2023,6 @@ function getFilteredCandidatos() {
   const qr = document.getElementById('f-rec-cand')?.value||'';
   const qs = document.getElementById('f-status-cand')?.value||'';
   const qa = document.getElementById('f-ant-cand')?.value||'';
-  const qbt = document.getElementById('f-bt-cand')?.value||'';
   const qrecont = document.getElementById('f-recont-cand')?.value||'';
   const qadm = document.getElementById('f-admitido-cand')?.value||'';
   return cands.filter(c =>
@@ -2002,7 +2031,6 @@ function getFilteredCandidatos() {
     (!qr || c.recrutadorId===qr) &&
     (!qs || c.statusProcesso===qs) &&
     (!qa || c.antecedentes===qa) &&
-    (!qbt || (qbt==='1'? c.bancoTalentosFlag : !c.bancoTalentosFlag)) &&
     (!qrecont || c.recontratacao===qrecont) &&
     (!qadm || (qadm==='1'? c.admitido : !c.admitido))
   );
@@ -2012,7 +2040,7 @@ function renderCandidatos() {
   const list = getFilteredCandidatos();
   document.getElementById('cand-count-label').textContent = `${list.length} candidato(s) encontrado(s)`;
   const tbody = document.getElementById('candidatos-tbody');
-  if(!list.length){tbody.innerHTML=`<tr><td colspan="13" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();return;}
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="12" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();return;}
   tbody.innerHTML = list.map(c => `<tr>
     <td><input type="checkbox" class="cand-chk" data-id="${c.id}" onclick="updateBulkBar()" style="cursor:pointer;width:15px;height:15px"/></td>
     <td><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')">${esc(c.nome)}</strong>${c.bancoTalentosFlag?'<span class="tag-bt" style="margin-left:5px">BT</span>':''}</td>
@@ -2025,7 +2053,6 @@ function renderCandidatos() {
     <td>${antBadge(c.antecedentes)}</td>
     <td>${reconBadge(c.recontratacao)}</td>
     <td>${c.admitido?'<span class="badge badge-orange">✅ Sim</span>':'<span class="badge badge-gray">Não</span>'}</td>
-    <td>${c.bancoTalentosFlag?'<span class="badge badge-purple">Sim</span>':'<span class="badge badge-gray">Não</span>'}</td>
     <td>
       <div style="display:flex;gap:4px">
         <button class="btn btn-secondary btn-sm" onclick="openCandModal('${c.id}')">✏</button>
@@ -2038,7 +2065,7 @@ function renderCandidatos() {
 
 function clearCandFilters() {
   ['f-nome-cand'].forEach(id=>document.getElementById(id).value='');
-  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-bt-cand','f-recont-cand','f-admitido-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand'].forEach(id=>document.getElementById(id).value='');
   renderCandidatos();
 }
 
