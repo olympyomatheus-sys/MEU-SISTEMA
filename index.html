@@ -663,10 +663,6 @@ thead th {
       <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       Recrutadores
     </div>
-    <div class="nav-item" data-page="rankings" onclick="navigate('rankings')">
-      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/><line x1="8" y1="6" x2="8" y2="2"/><line x1="16" y1="6" x2="16" y2="2"/></svg>
-      Rankings
-    </div>
   </nav>
   <div id="sidebar-footer">v3.0 · GRUPO GPS · 2025</div>
 </aside>
@@ -759,6 +755,10 @@ thead th {
           <div class="card-header"><span class="card-title">✅ Ranking de Admitidos por Feirão</span></div>
           <div class="card-body" id="dash-rank-admitidos"></div>
         </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">🧑‍💼 Recrutadores por Admissões</span></div>
+          <div class="card-body" id="dash-rank-rec-adm"></div>
+        </div>
       </div>
     </div>
 
@@ -847,7 +847,6 @@ thead th {
           <option value="APROVADO">Aprovado</option>
           <option value="REPROVADO">Reprovado</option>
           <option value="EM_ANALISE">Em Análise</option>
-          <option value="BANCO_TALENTOS">Banco de Talentos</option>
         </select>
         <select id="f-ant-cand" onchange="renderCandidatos()">
           <option value="">Antecedentes</option>
@@ -864,6 +863,11 @@ thead th {
           <option value="NUNCA_TRABALHOU_NA_GPS">Nunca GPS</option>
           <option value="APROVADO">Aprovado</option>
           <option value="REPROVADO">Reprovado</option>
+        </select>
+        <select id="f-admitido-cand" onchange="renderCandidatos()">
+          <option value="">Todos</option>
+          <option value="1">✅ Apenas Admitidos</option>
+          <option value="0">Não Admitidos</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
       </div>
@@ -913,6 +917,10 @@ thead th {
         <select id="f-bt-rec" onchange="renderTalentos()">
           <option value="">Todos os Recrutadores</option>
         </select>
+        <select id="f-bt-admitido" onchange="renderTalentos()">
+          <option value="">Todos</option>
+          <option value="1">✅ Apenas Admitidos</option>
+        </select>
         <button class="btn btn-secondary btn-sm" onclick="clearBTFilters()">Limpar</button>
       </div>
       <div class="card">
@@ -938,43 +946,6 @@ thead th {
     </div>
 
 
-    <!-- PAGE: RANKINGS -->
-    <div id="page-rankings" class="page">
-      <div style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--gray-200)">
-        <h2 style="font-size:1.3rem;font-weight:800;color:var(--blue-800)">🏆 Rankings</h2>
-        <p class="text-muted text-sm">Classificações por cargo, cidade, feirão e admissões</p>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">💼 Ranking por Cargo</span>
-            <span class="text-muted text-sm" style="font-size:.76rem">Total de candidatos por cargo</span>
-          </div>
-          <div class="card-body" id="rank-cargo-body"></div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">📍 Ranking por Cidade</span>
-            <span class="text-muted text-sm" style="font-size:.76rem">Total de candidatos por cidade</span>
-          </div>
-          <div class="card-body" id="rank-cidade-body"></div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">✅ Admitidos por Feirão</span>
-            <span class="text-muted text-sm" style="font-size:.76rem">Candidatos admitidos em cada feirão</span>
-          </div>
-          <div class="card-body" id="rank-admitidos-body"></div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">🎯 Recrutadores × Admissões</span>
-            <span class="text-muted text-sm" style="font-size:.76rem">Candidatos admitidos por recrutador</span>
-          </div>
-          <div class="card-body" id="rank-rec-adm-body"></div>
-        </div>
-      </div>
-    </div>
 
     <!-- ═══════════════════════════════════════════════════
          PAGE: CALENDÁRIO (NOVA ABA)
@@ -1583,7 +1554,6 @@ const pageNames = {
   dashboard: 'Analytics', feiraos: 'Feirões de Emprego', candidatos: 'Candidatos',
   talentos: 'Banco de Talentos', calendario: 'Calendário',
   importar: 'Importar Excel', recrutadores: 'Recrutadores',
-  rankings: 'Rankings',
 };
 let currentPage = 'dashboard';
 function navigate(page) {
@@ -1605,7 +1575,6 @@ function refreshPage(page) {
   if(page==='calendario') { populateFeiraoSelects(); renderCalendar(); }
   if(page==='importar') populateFeiraoSelects();
   if(page==='recrutadores') renderRecrutadores();
-  if(page==='rankings') renderRankings();
 }
 
 function toggleSidebar() {
@@ -2026,14 +1995,16 @@ function getFilteredCandidatos() {
   const qa = document.getElementById('f-ant-cand')?.value||'';
   const qbt = document.getElementById('f-bt-cand')?.value||'';
   const qrecont = document.getElementById('f-recont-cand')?.value||'';
+  const qadm = document.getElementById('f-admitido-cand')?.value||'';
   return cands.filter(c =>
     (!fid || c.feiraoId===fid) &&
-    (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)||normStr(c.cr).includes(q)) &&
+    (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)||normStr(c.cr).includes(q)||normStr(c.cargo||'').includes(q)) &&
     (!qr || c.recrutadorId===qr) &&
     (!qs || c.statusProcesso===qs) &&
     (!qa || c.antecedentes===qa) &&
     (!qbt || (qbt==='1'? c.bancoTalentosFlag : !c.bancoTalentosFlag)) &&
-    (!qrecont || c.recontratacao===qrecont)
+    (!qrecont || c.recontratacao===qrecont) &&
+    (!qadm || (qadm==='1'? c.admitido : !c.admitido))
   );
 }
 
@@ -2067,7 +2038,7 @@ function renderCandidatos() {
 
 function clearCandFilters() {
   ['f-nome-cand'].forEach(id=>document.getElementById(id).value='');
-  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-bt-cand','f-recont-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-bt-cand','f-recont-cand','f-admitido-cand'].forEach(id=>document.getElementById(id).value='');
   renderCandidatos();
 }
 
@@ -2109,10 +2080,12 @@ function renderTalentos() {
   const q = normStr(document.getElementById('f-bt-nome')?.value||'');
   const fid = document.getElementById('f-bt-feirao')?.value||'';
   const qr = document.getElementById('f-bt-rec')?.value||'';
+  const qadm = document.getElementById('f-bt-admitido')?.value||'';
   let list = cands.filter(c =>
     (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)) &&
     (!fid || c.feiraoId===fid) &&
-    (!qr || c.recrutadorId===qr)
+    (!qr || c.recrutadorId===qr) &&
+    (!qadm || c.admitido)
   );
   document.getElementById('bt-count-label').textContent = `${list.length} talento(s) no banco global`;
   const tbody = document.getElementById('talentos-tbody');
@@ -2134,6 +2107,7 @@ function clearBTFilters() {
   document.getElementById('f-bt-nome').value='';
   document.getElementById('f-bt-feirao').value='';
   document.getElementById('f-bt-rec').value='';
+  document.getElementById('f-bt-admitido').value='';
   renderTalentos();
 }
 
@@ -2311,6 +2285,29 @@ function renderDashboard() {
       <div class="ranking-info"><div class="ranking-label">${esc(k)}</div><div class="ranking-sub"><div class="progress-bar" style="margin-top:4px"><div class="progress-fill" style="width:${Math.round(v/maxAdm*100)}%;background:#c2410c"></div></div></div></div>
       <div class="ranking-value">${v}</div>
     </div>`).join('') : '<p class="text-muted text-sm text-center" style="padding:16px">Nenhum candidato admitido ainda</p>';
+
+  // Ranking de Recrutadores por Admissões
+  const recAdmMap = {};
+  cands.forEach(c => {
+    const k = c.recrutadorNome||'Sem recrutador';
+    recAdmMap[k] = recAdmMap[k]||{total:0,adm:0,aprov:0};
+    recAdmMap[k].total++;
+    if(c.admitido) recAdmMap[k].adm++;
+    if(c.statusProcesso==='APROVADO') recAdmMap[k].aprov++;
+  });
+  const recAdmList = Object.entries(recAdmMap).sort((a,b)=>b[1].adm-a[1].adm).slice(0,8);
+  const maxRecAdm = recAdmList[0]?.[1]?.adm||1;
+  const rankRecAdmEl = document.getElementById('dash-rank-rec-adm');
+  if(rankRecAdmEl) rankRecAdmEl.innerHTML = recAdmList.length ? recAdmList.map(([k,d],i)=>`
+    <div class="ranking-item">
+      <div class="ranking-medal ${i===0?'medal-1':i===1?'medal-2':i===2?'medal-3':'medal-n'}">${i+1}</div>
+      <div class="ranking-info">
+        <div class="ranking-label">${esc(k)}</div>
+        <div class="ranking-sub">${d.total} cands · ${d.aprov} aprov · ${d.adm} admitidos</div>
+        <div class="progress-bar" style="margin-top:4px"><div class="progress-fill" style="width:${d.adm?Math.round(d.adm/maxRecAdm*100):0}%;background:var(--purple)"></div></div>
+      </div>
+      <div class="ranking-value">${d.adm}</div>
+    </div>`).join('') : '<p class="text-muted text-sm">Nenhum dado</p>';
 }
 
 function clearDashFilters() {
@@ -2353,9 +2350,13 @@ function doGlobalSearch(q) {
   const nq = normStr(q);
   const cands = DB.candidatos().filter(c=>
     normStr(c.nome).includes(nq)||normStr(c.cpf).includes(nq)||normStr(c.cr||'').includes(nq)||
-    normStr(c.recrutadorNome).includes(nq)||normStr(c.statusProcesso).includes(nq)
+    normStr(c.recrutadorNome).includes(nq)||normStr(c.statusProcesso).includes(nq)||
+    normStr(c.cargo||'').includes(nq)||normStr(c.cidade||c.feiraoLocal||'').includes(nq)
   ).slice(0,8);
-  const feiraos = DB.feiraos().filter(f=>normStr(f.nomeFeirao).includes(nq)||normStr(f.localEvento).includes(nq)||normStr(f.recrutadorNome).includes(nq)).slice(0,4);
+  const feiraos = DB.feiraos().filter(f=>
+    normStr(f.nomeFeirao).includes(nq)||normStr(f.localEvento).includes(nq)||
+    normStr(f.recrutadorNome).includes(nq)||normStr(f.enderecoCompleto||'').includes(nq)
+  ).slice(0,4);
   let html = '';
   if(feiraos.length) {
     html += `<div style="padding:6px 12px;font-size:.72rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;background:var(--gray-100)">Feirões</div>`;
@@ -2368,7 +2369,7 @@ function doGlobalSearch(q) {
     html += `<div style="padding:6px 12px;font-size:.72rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;background:var(--gray-100)">Candidatos</div>`;
     html += cands.map(c=>`<div class="srd-item" onclick="viewCandidato('${c.id}')">
       <div class="srd-name">${esc(c.nome)} ${c.bancoTalentosFlag?'⭐':''}</div>
-      <div class="srd-meta">CPF: ${esc(c.cpf)} · CR: ${esc(c.cr||'—')} · ${statusLabel(c.statusProcesso)}</div>
+      <div class="srd-meta">CPF: ${esc(c.cpf)} · ${esc(c.cargo||'—')} · ${esc(c.cidade||c.feiraoLocal||'—')} · ${statusLabel(c.statusProcesso)}</div>
     </div>`).join('');
   }
   if(!html) html = '<div class="srd-empty">Nenhum resultado encontrado</div>';
@@ -3077,93 +3078,6 @@ function maskTel(i) {
 // ═══════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════
-
-// ═══════════════════════════════════════
-// RANKINGS PAGE
-// ═══════════════════════════════════════
-function renderRankings() {
-  const cands = DB.candidatos();
-  const feiraos = DB.feiraos();
-
-  // --- Ranking Cargo ---
-  const cargoCounts = {};
-  cands.forEach(c => { const k = c.cargo||'Não informado'; cargoCounts[k]=(cargoCounts[k]||{total:0,adm:0}); cargoCounts[k].total++; if(c.admitido) cargoCounts[k].adm++; });
-  const cargoList = Object.entries(cargoCounts).sort((a,b)=>b[1].total-a[1].total);
-  const maxCargo = cargoList[0]?.[1]?.total||1;
-  const el_cargo = document.getElementById('rank-cargo-body');
-  if(el_cargo) el_cargo.innerHTML = cargoList.length ? cargoList.map(([k,d],i)=>`
-    <div class="ranking-item">
-      <div class="ranking-medal ${i===0?'medal-1':i===1?'medal-2':i===2?'medal-3':'medal-n'}">${i+1}</div>
-      <div class="ranking-info">
-        <div class="ranking-label">${esc(k)}</div>
-        <div class="ranking-sub">${d.adm} admitido(s)</div>
-        <div class="progress-bar" style="margin-top:5px;width:100%"><div class="progress-fill" style="width:${Math.round(d.total/maxCargo*100)}%;background:var(--blue-500)"></div></div>
-      </div>
-      <div class="ranking-value">${d.total}</div>
-    </div>`).join('') : '<p class="text-muted text-sm">Nenhum dado</p>';
-
-  // --- Ranking Cidade ---
-  const cidadeCounts = {};
-  cands.forEach(c => { const k = c.cidade||c.feiraoLocal||'Não informado'; cidadeCounts[k]=(cidadeCounts[k]||{total:0,adm:0}); cidadeCounts[k].total++; if(c.admitido) cidadeCounts[k].adm++; });
-  const cidadeList = Object.entries(cidadeCounts).sort((a,b)=>b[1].total-a[1].total);
-  const maxCidade = cidadeList[0]?.[1]?.total||1;
-  const el_cidade = document.getElementById('rank-cidade-body');
-  if(el_cidade) el_cidade.innerHTML = cidadeList.length ? cidadeList.map(([k,d],i)=>`
-    <div class="ranking-item">
-      <div class="ranking-medal ${i===0?'medal-1':i===1?'medal-2':i===2?'medal-3':'medal-n'}">${i+1}</div>
-      <div class="ranking-info">
-        <div class="ranking-label">${esc(k)}</div>
-        <div class="ranking-sub">${d.adm} admitido(s)</div>
-        <div class="progress-bar" style="margin-top:5px;width:100%"><div class="progress-fill" style="width:${Math.round(d.total/maxCidade*100)}%;background:var(--green)"></div></div>
-      </div>
-      <div class="ranking-value">${d.total}</div>
-    </div>`).join('') : '<p class="text-muted text-sm">Nenhum dado</p>';
-
-  // --- Ranking Admitidos por Feirão ---
-  const admMap = {};
-  feiraos.forEach(f => { admMap[f.id] = {nome:f.nomeFeirao, local:f.localEvento, total:0, adm:0}; });
-  cands.forEach(c => {
-    if(!admMap[c.feiraoId]) admMap[c.feiraoId]={nome:c.feiraoNome,local:c.feiraoLocal||'',total:0,adm:0};
-    admMap[c.feiraoId].total++;
-    if(c.admitido) admMap[c.feiraoId].adm++;
-  });
-  const admList = Object.values(admMap).filter(x=>x.adm>0).sort((a,b)=>b.adm-a.adm);
-  const maxAdm = admList[0]?.adm||1;
-  const el_adm = document.getElementById('rank-admitidos-body');
-  if(el_adm) el_adm.innerHTML = admList.length ? admList.map((d,i)=>`
-    <div class="ranking-item">
-      <div class="ranking-medal ${i===0?'medal-1':i===1?'medal-2':i===2?'medal-3':'medal-n'}">${i+1}</div>
-      <div class="ranking-info">
-        <div class="ranking-label">${esc(d.nome)}</div>
-        <div class="ranking-sub">${esc(d.local)} · ${d.total} candidatos</div>
-        <div class="progress-bar" style="margin-top:5px;width:100%"><div class="progress-fill" style="width:${Math.round(d.adm/maxAdm*100)}%;background:#c2410c"></div></div>
-      </div>
-      <div class="ranking-value">${d.adm}</div>
-    </div>`).join('') : '<p class="text-muted text-sm text-center" style="padding:16px">Nenhum admitido registrado</p>';
-
-  // --- Ranking Recrutadores (admitidos) ---
-  const recAdmMap = {};
-  cands.forEach(c => {
-    const k = c.recrutadorNome||'Sem recrutador';
-    recAdmMap[k]=(recAdmMap[k]||{total:0,adm:0,aprov:0});
-    recAdmMap[k].total++;
-    if(c.admitido) recAdmMap[k].adm++;
-    if(c.statusProcesso==='APROVADO') recAdmMap[k].aprov++;
-  });
-  const recAdmList = Object.entries(recAdmMap).sort((a,b)=>b[1].adm-a[1].adm);
-  const maxRecAdm = recAdmList[0]?.[1]?.adm||1;
-  const el_recadm = document.getElementById('rank-rec-adm-body');
-  if(el_recadm) el_recadm.innerHTML = recAdmList.length ? recAdmList.map(([k,d],i)=>`
-    <div class="ranking-item">
-      <div class="ranking-medal ${i===0?'medal-1':i===1?'medal-2':i===2?'medal-3':'medal-n'}">${i+1}</div>
-      <div class="ranking-info">
-        <div class="ranking-label">${esc(k)}</div>
-        <div class="ranking-sub">${d.total} cands · ${d.aprov} aprov · ${d.adm} admitidos</div>
-        <div class="progress-bar" style="margin-top:5px;width:100%"><div class="progress-fill" style="width:${d.adm?Math.round(d.adm/maxRecAdm*100):0}%;background:var(--purple)"></div></div>
-      </div>
-      <div class="ranking-value">${d.adm}</div>
-    </div>`).join('') : '<p class="text-muted text-sm">Nenhum dado</p>';
-}
 
 window._appReady = false;
 
