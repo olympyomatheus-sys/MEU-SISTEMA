@@ -667,6 +667,49 @@ thead th {
   <div id="sidebar-footer">v3.0 · GRUPO GPS · 2025</div>
 </aside>
 
+<!-- MODAL: AJUSTE DE REGISTRO COM ERRO NA IMPORTAÇÃO -->
+<div class="modal-overlay" id="modal-imp-edit">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="imp-edit-title">Ajustar Registro</span>
+      <button class="modal-close" onclick="closeModal('modal-imp-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="imp-edit-errs" style="margin-bottom:14px;display:flex;flex-direction:column;gap:4px;padding:10px 14px;background:var(--red-light);border:1px solid #fca5a5;border-radius:8px"></div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Nome do Candidato *</label>
+          <input id="imp-edit-nome" type="text" placeholder="Nome completo"/>
+        </div>
+        <div class="form-group">
+          <label>CPF *</label>
+          <input id="imp-edit-cpf" type="text" placeholder="000.000.000-00" oninput="maskCPF(this)"/>
+        </div>
+        <div class="form-group">
+          <label>Telefone</label>
+          <input id="imp-edit-tel" type="text" placeholder="(00) 00000-0000" oninput="maskTel(this)"/>
+        </div>
+        <div class="form-group">
+          <label>Cargo</label>
+          <input id="imp-edit-cargo" type="text" placeholder="Cargo pretendido"/>
+        </div>
+        <div class="form-group">
+          <label>Cidade</label>
+          <input id="imp-edit-cidade" type="text" placeholder="Cidade - UF"/>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Observações</label>
+          <textarea id="imp-edit-obs" placeholder="Observações opcionais…" style="min-height:60px"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-imp-edit')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveImpEdit()">✔ Salvar Ajuste</button>
+    </div>
+  </div>
+</div>
+
 <!-- MAIN -->
 <div id="main">
   <!-- TOPBAR -->
@@ -843,9 +886,9 @@ thead th {
           <option value="">Todos os Recrutadores</option>
         </select>
         <select id="f-status-cand" onchange="renderCandidatos()">
-          <option value="">Todos os status</option>
-          <option value="APROVADO">Aprovado</option>
-          <option value="REPROVADO">Reprovado</option>
+          <option value="">Status</option>
+          <option value="APROVADO">✅ Aprovado (resultado final)</option>
+          <option value="REPROVADO">❌ Reprovado</option>
           <option value="EM_ANALISE">Em Análise</option>
           <option value="BANCO_TALENTOS">⭐ Banco de Talentos</option>
         </select>
@@ -883,6 +926,7 @@ thead th {
                 <th>Antecedentes</th>
                 <th>Ex-Colaborador</th>
                 <th>Admitido</th>
+                <th>Data Inclusão</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -1059,7 +1103,7 @@ thead th {
               ondrop="handleDrop(event)">
               <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <p>Arraste o arquivo .xlsx ou clique para selecionar</p>
-              <small>Colunas esperadas: nome, cpf, cr, statusProcesso, antecedentes, recontratacao, motivoReprovacao, observacoes, <strong>bancoTalentos</strong> (SIM/NAO)</small>
+              <small>Colunas reconhecidas: nome, cpf, telefone, cargo, cidade, endereco, admitido, statusProcesso, antecedentes, recontratacao, motivoReprovacao, observacoes, <strong>bancoTalentos</strong> (SIM/NAO), <strong>dataInclusao</strong> (opcional). A planilha pode ter colunas extras — elas serão ignoradas automaticamente.</small>
             </div>
             <input id="imp-file" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(event)"/>
             <div id="imp-status" style="margin-top:12px"></div>
@@ -1068,20 +1112,24 @@ thead th {
             </div>
           </div>
         </div>
-        <div class="card">
+        <div class="card" style="display:flex;flex-direction:column">
           <div class="card-header">
             <span class="card-title">Preview da Importação</span>
             <button class="btn btn-primary btn-sm" id="btn-imp-confirm" onclick="confirmImport()" style="display:none">Confirmar Importação</button>
           </div>
-          <div class="card-body" id="imp-preview">
+          <!-- Erros inline: visível imediatamente, sem scroll de página -->
+          <div id="imp-errors-wrap" style="display:none;border-bottom:1px solid var(--gray-200)">
+            <div style="padding:12px 20px 0;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+              <span style="font-size:.82rem;font-weight:700;color:var(--red)">⚠ Registros com Erro</span>
+              <button class="btn btn-secondary btn-sm" onclick="toggleImpErrors()" id="btn-toggle-errs" style="font-size:.75rem;padding:3px 10px">▲ Ocultar</button>
+            </div>
+            <div id="imp-errors" style="padding:10px 20px 14px;max-height:220px;overflow-y:auto">
+              <p class="text-muted text-sm">✅ Nenhum erro registrado.</p>
+            </div>
+          </div>
+          <div class="card-body" id="imp-preview" style="flex:1">
             <p class="text-muted text-sm text-center" style="padding:30px 0">Nenhum arquivo selecionado</p>
           </div>
-        </div>
-      </div>
-      <div class="card" style="margin-top:20px">
-        <div class="card-header"><span class="card-title">Log de Erros da Última Importação</span></div>
-        <div class="card-body" id="imp-errors">
-          <p class="text-muted text-sm">Nenhum erro registrado.</p>
         </div>
       </div>
     </div>
@@ -1511,7 +1559,7 @@ async function seedIfEmpty() {
         statusProcesso: status, antecedentes: ant, recontratacao: recont,
         motivoReprovacao: (status==='REPROVADO'||ant==='REPROVADO') ? motivos[i%motivos.length] : '',
         observacoes: '', recrutadorId: f.recrutadorId, recrutadorNome: f.recrutadorNome,
-        bancoTalentosFlag: false,
+        bancoTalentosFlag: false, dataInclusao: f.dataEvento,
       };
       applyRuleEngine(c);
       cands.push(c);
@@ -1959,12 +2007,14 @@ async function saveCandidato() {
   let cands = DB.candidatos();
   const dupCPF = cands.find(c=>normStr(c.cpf)===normStr(cpf) && c.id!==editCandId);
   if(dupCPF){toast('CPF já cadastrado em outro candidato!','error');return;}
+  const existente = editCandId ? cands.find(x=>x.id===editCandId) : null;
   const c = {
     id: editCandId||uid(), feiraoId: fid, feiraoNome: f.nomeFeirao, feiraoLocal: f.localEvento,
     nome, cpf, telefone:tel, cr, cargo, cidade, endereco, admitido,
     statusProcesso:status, antecedentes:ant,
     recontratacao:recont, motivoReprovacao:motivo, observacoes:obs,
     recrutadorId: f.recrutadorId, recrutadorNome: f.recrutadorNome, bancoTalentosFlag: false,
+    dataInclusao: existente?.dataInclusao || today(),
   };
   applyRuleEngine(c);
   if(editCandId) {
@@ -2004,6 +2054,7 @@ function viewCandidato(id) {
       <div><span class="text-muted text-sm">Status</span><p style="margin-top:2px">${statusBadge(c.statusProcesso)}</p></div>
       <div><span class="text-muted text-sm">Antecedentes</span><p style="margin-top:2px">${antBadge(c.antecedentes)}</p></div>
       <div><span class="text-muted text-sm">Recontratação</span><p style="margin-top:2px">${reconBadge(c.recontratacao)}</p></div>
+      <div><span class="text-muted text-sm">Data de Inclusão</span><p style="margin-top:2px">${fmt(c.dataInclusao)||'—'}</p></div>
       <div><span class="text-muted text-sm">Motivo Reprovação</span><p style="margin-top:2px">${esc(c.motivoReprovacao)||'—'}</p></div>
       ${c.endereco?`<div style="grid-column:1/-1"><span class="text-muted text-sm">Endereço</span><p style="margin-top:2px">${esc(c.endereco)}</p></div>`:''}
       <div style="grid-column:1/-1"><span class="text-muted text-sm">Observações</span><p style="margin-top:2px">${esc(c.observacoes)||'—'}</p></div>
@@ -2016,31 +2067,57 @@ function viewCandidato(id) {
   openModal('modal-cand-detail');
 }
 
+// ── Verifica se um candidato é "Aprovado consolidado":
+//    status final Aprovado E antecedentes OK E recontratação não reprovada
+function _isAprovadoConsolidado(c) {
+  return c.statusProcesso === 'APROVADO'
+    && c.antecedentes !== 'REPROVADO'
+    && c.recontratacao !== 'REPROVADO';
+}
+
+// ── Verifica se um candidato é "Reprovado":
+//    apenas statusProcesso final igual a REPROVADO
+function _isReprovadoConsolidado(c) {
+  return c.statusProcesso === 'REPROVADO';
+}
+
 function getFilteredCandidatos() {
   let cands = DB.candidatos();
-  const fid = document.getElementById('f-feirao-cand')?.value||'';
-  const q = normStr(document.getElementById('f-nome-cand')?.value||'');
-  const qr = document.getElementById('f-rec-cand')?.value||'';
-  const qs = document.getElementById('f-status-cand')?.value||'';
-  const qa = document.getElementById('f-ant-cand')?.value||'';
-  const qrecont = document.getElementById('f-recont-cand')?.value||'';
-  const qadm = document.getElementById('f-admitido-cand')?.value||'';
-  return cands.filter(c =>
-    (!fid || c.feiraoId===fid) &&
-    (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)||normStr(c.cr).includes(q)||normStr(c.cargo||'').includes(q)) &&
-    (!qr || c.recrutadorId===qr) &&
-    (!qs || c.statusProcesso===qs) &&
-    (!qa || c.antecedentes===qa) &&
-    (!qrecont || c.recontratacao===qrecont) &&
-    (!qadm || (qadm==='1'? c.admitido : !c.admitido))
-  );
+  const fid    = document.getElementById('f-feirao-cand')?.value||'';
+  const q      = normStr(document.getElementById('f-nome-cand')?.value||'');
+  const qr     = document.getElementById('f-rec-cand')?.value||'';
+  const qs     = document.getElementById('f-status-cand')?.value||'';
+  const qa     = document.getElementById('f-ant-cand')?.value||'';
+  const qrecont= document.getElementById('f-recont-cand')?.value||'';
+  const qadm   = document.getElementById('f-admitido-cand')?.value||'';
+
+  return cands.filter(c => {
+    // ── Filtro de status consolidado ──────────────────────────────────
+    // APROVADO  → resultado final positivo em todas as etapas
+    // REPROVADO → qualquer reprovação em qualquer etapa
+    // EM_ANALISE / BANCO_TALENTOS → comportamento original (igualdade exata)
+    let statusOk = true;
+    if (qs === 'APROVADO')       statusOk = _isAprovadoConsolidado(c);
+    else if (qs === 'REPROVADO') statusOk = _isReprovadoConsolidado(c);
+    else if (qs)                 statusOk = c.statusProcesso === qs;
+
+    return (
+      (!fid    || c.feiraoId === fid) &&
+      (!q      || normStr(c.nome).includes(q) || normStr(c.cpf).includes(q) || normStr(c.cr||'').includes(q) || normStr(c.cargo||'').includes(q)) &&
+      (!qr     || c.recrutadorId === qr) &&
+      statusOk &&
+      (!qa     || c.antecedentes === qa) &&
+      (!qrecont|| c.recontratacao === qrecont) &&
+      (!qadm   || (qadm === '1' ? c.admitido : !c.admitido))
+    );
+  });
 }
 
 function renderCandidatos() {
   const list = getFilteredCandidatos();
   document.getElementById('cand-count-label').textContent = `${list.length} candidato(s) encontrado(s)`;
   const tbody = document.getElementById('candidatos-tbody');
-  if(!list.length){tbody.innerHTML=`<tr><td colspan="12" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();return;}
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="13" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();return;}
   tbody.innerHTML = list.map(c => `<tr>
     <td><input type="checkbox" class="cand-chk" data-id="${c.id}" onclick="updateBulkBar()" style="cursor:pointer;width:15px;height:15px"/></td>
     <td><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')">${esc(c.nome)}</strong>${c.bancoTalentosFlag?'<span class="tag-bt" style="margin-left:5px">BT</span>':''}</td>
@@ -2053,6 +2130,7 @@ function renderCandidatos() {
     <td>${antBadge(c.antecedentes)}</td>
     <td>${reconBadge(c.recontratacao)}</td>
     <td>${c.admitido?'<span class="badge badge-orange">✅ Sim</span>':'<span class="badge badge-gray">Não</span>'}</td>
+    <td>${fmt(c.dataInclusao)||'—'}</td>
     <td>
       <div style="display:flex;gap:4px">
         <button class="btn btn-secondary btn-sm" onclick="openCandModal('${c.id}')">✏</button>
@@ -2421,7 +2499,7 @@ function processFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const wb = XLSX.read(e.target.result, {type:'binary', cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
       importPreviewData = rows;
@@ -2433,35 +2511,214 @@ function processFile(file) {
   reader.readAsBinaryString(file);
 }
 
+// ── Mapa de campos aceitos pelo sistema → possíveis nomes de coluna na planilha.
+// A comparação ignora maiúsculas/minúsculas, acentos, espaços e símbolos,
+// então "Data de Inclusão", "data_inclusao" e "DATA INCLUSAO" são equivalentes.
+// Qualquer outra coluna presente na planilha (fora desta lista) é simplesmente ignorada.
+const IMPORT_FIELD_MAP = {
+  nome:             ['nome','nome completo','candidato','nome do candidato'],
+  cpf:              ['cpf','documento'],
+  telefone:         ['telefone','celular','contato','fone','whatsapp'],
+  cr:               ['cr','codigo','registro','cr codigo'],
+  cargo:            ['cargo','cargo pretendido','funcao','vaga'],
+  cidade:           ['cidade','cidade uf','cidade/uf'],
+  endereco:         ['endereco','endereco completo'],
+  admitido:         ['admitido','admissao'],
+  statusProcesso:   ['statusprocesso','status','status do processo'],
+  antecedentes:     ['antecedentes','antecedentes criminais'],
+  recontratacao:    ['recontratacao','exfuncionario','ex-colaborador','ex colaborador','pesquisa ex-colaborador'],
+  motivoReprovacao: ['motivoreprovacao','motivo','motivo da reprovacao','motivo reprovacao'],
+  observacoes:      ['observacoes','obs','observacao'],
+  bancoTalentos:    ['bancotalentos','banco talentos','banco de talentos'],
+  dataInclusao:     ['datainclusao','data inclusao','data de inclusao','data cadastro','data de cadastro','data'],
+};
+
+// ── Extrai e normaliza os dados de uma linha da planilha, usando apenas
+// os campos definidos em IMPORT_FIELD_MAP (colunas extras são ignoradas).
+function extractImportRow(r) {
+  const mapStatus = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','em analise':'EM_ANALISE','em_analise':'EM_ANALISE','banco talentos':'BANCO_TALENTOS','banco_talentos':'BANCO_TALENTOS'};return m[normStr(String(v||''))]||'EM_ANALISE';};
+  const mapAnt = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO'};return m[normStr(String(v||''))]||'APROVADO';};
+  const mapRec = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','nunca':'NUNCA_TRABALHOU_NA_GPS','nunca_trabalhou_na_gps':'NUNCA_TRABALHOU_NA_GPS'};return m[normStr(String(v||''))]||'NUNCA_TRABALHOU_NA_GPS';};
+  const isSim = v => ['s','sim','yes','1','true','x'].includes(normStr(String(v||'')));
+  return {
+    nome: String(getCol(r,...IMPORT_FIELD_MAP.nome)).trim(),
+    cpf: String(getCol(r,...IMPORT_FIELD_MAP.cpf)).trim(),
+    telefone: String(getCol(r,...IMPORT_FIELD_MAP.telefone)).trim(),
+    cr: String(getCol(r,...IMPORT_FIELD_MAP.cr)).trim(),
+    cargo: String(getCol(r,...IMPORT_FIELD_MAP.cargo)).trim(),
+    cidade: String(getCol(r,...IMPORT_FIELD_MAP.cidade)).trim(),
+    endereco: String(getCol(r,...IMPORT_FIELD_MAP.endereco)).trim(),
+    admitido: isSim(getCol(r,...IMPORT_FIELD_MAP.admitido)),
+    statusProcesso: mapStatus(getCol(r,...IMPORT_FIELD_MAP.statusProcesso)),
+    antecedentes: mapAnt(getCol(r,...IMPORT_FIELD_MAP.antecedentes)),
+    recontratacao: mapRec(getCol(r,...IMPORT_FIELD_MAP.recontratacao)),
+    motivoReprovacao: String(getCol(r,...IMPORT_FIELD_MAP.motivoReprovacao)).trim(),
+    observacoes: String(getCol(r,...IMPORT_FIELD_MAP.observacoes)).trim(),
+    bancoTalentosFlag: isSim(getCol(r,...IMPORT_FIELD_MAP.bancoTalentos)),
+    dataInclusao: parseDateCell(getCol(r,...IMPORT_FIELD_MAP.dataInclusao)) || today(),
+  };
+}
+
+// ── Mostra/oculta painel de erros inline
+function toggleImpErrors() {
+  const inner = document.getElementById('imp-errors');
+  const btn   = document.getElementById('btn-toggle-errs');
+  const hidden = inner.style.display === 'none';
+  inner.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '▲ Ocultar' : '▼ Ver erros';
+}
+
+function _setImpErrorsVisible(hasErrors) {
+  document.getElementById('imp-errors-wrap').style.display = hasErrors ? '' : 'none';
+  // Garante que o painel começa expandido sempre que há erros novos
+  const inner = document.getElementById('imp-errors');
+  const btn   = document.getElementById('btn-toggle-errs');
+  inner.style.display = '';
+  if(btn) btn.textContent = '▲ Ocultar';
+}
+
+
+
 function renderImportPreview(rows) {
   const errors = [];
   const valid = [];
   const existingCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
+
   rows.forEach((r,i) => {
-    const cpf = String(r.cpf||r.CPF||'').trim();
-    const nome = String(r.nome||r.Nome||r.NOME||'').trim();
+    const dados = extractImportRow(r);
+    const { nome, cpf } = dados;
+    // Guarda dados extraídos na própria linha para reuso
+    r.__extracted = dados;
     const rowErrors = [];
     if(!nome) rowErrors.push('Nome ausente');
-    if(!cpf) rowErrors.push('CPF ausente');
-    else if(existingCPFs.has(normStr(cpf))) rowErrors.push('CPF duplicado');
-    if(rowErrors.length) errors.push({row:i+2, errors:rowErrors});
-    else valid.push(r);
+    if(!cpf)  rowErrors.push('CPF ausente');
+    else if(existingCPFs.has(normStr(cpf))) rowErrors.push(`CPF duplicado (${cpf})`);
+    if(rowErrors.length) {
+      errors.push({ rowIdx: i, row: i+2, nome: nome||'(sem nome)', cpf: cpf||'(sem CPF)', errors: rowErrors });
+    } else {
+      valid.push(r);
+    }
   });
-  document.getElementById('imp-status').innerHTML = `<span class="badge badge-green">${valid.length} válidos</span> <span class="badge badge-red">${errors.length} com erro</span>`;
+
+  document.getElementById('imp-status').innerHTML =
+    `<span class="badge badge-green">${valid.length} válido(s)</span> <span class="badge badge-red">${errors.length} com erro</span>`;
   document.getElementById('btn-imp-confirm').style.display = valid.length ? '' : 'none';
+
   const preview = document.getElementById('imp-preview');
-  if(!rows.length){preview.innerHTML='<p class="text-muted text-sm">Planilha vazia</p>';return;}
-  const cols = Object.keys(rows[0]).slice(0,6);
-  preview.innerHTML = `<div class="table-wrap"><table>
+  if(!rows.length){ preview.innerHTML='<p class="text-muted text-sm">Planilha vazia</p>'; return; }
+
+  const allColNames = Object.keys(rows[0]).filter(c => c !== '__normKeys' && c !== '__extracted');
+  const recognizedNorm = new Set();
+  Object.values(IMPORT_FIELD_MAP).forEach(names => names.forEach(n => recognizedNorm.add(normColName(n))));
+  const recognized = allColNames.filter(c => recognizedNorm.has(normColName(c)));
+  const ignored    = allColNames.filter(c => !recognizedNorm.has(normColName(c)));
+  let infoHtml = `<p class="text-muted text-sm" style="margin-bottom:8px">Colunas reconhecidas: <strong>${recognized.map(c=>esc(c)).join(', ')||'—'}</strong>.`;
+  if(ignored.length) infoHtml += ` Extras ignoradas: ${ignored.map(c=>esc(c)).join(', ')}.`;
+  infoHtml += `</p>`;
+
+  const cols = allColNames.slice(0,6);
+  const tableRows = rows.slice(0,50).map((r,i) => {
+    const dados = r.__extracted || extractImportRow(r);
+    const cpf = dados.cpf;
+    const nome = dados.nome;
+    const hasErr = !nome || !cpf || existingCPFs.has(normStr(cpf));
+    const rowErrs = [];
+    if(!nome) rowErrs.push('Nome ausente');
+    if(!cpf) rowErrs.push('CPF ausente');
+    else if(existingCPFs.has(normStr(cpf))) rowErrs.push('CPF duplicado');
+    return `<tr style="${hasErr?'background:var(--red-light)':''}">
+      <td>${i+2}</td>
+      ${cols.map(c=>`<td>${esc(String(r[c]||''))}</td>`).join('')}
+      <td>${hasErr
+        ? `<span class="badge badge-red" style="cursor:pointer" onclick="openImpEditModal(${i})" title="${rowErrs.join('; ')}">⚠ Erro</span>`
+        : '<span class="badge badge-green">OK</span>'
+      }</td>
+    </tr>`;
+  }).join('');
+
+  preview.innerHTML = infoHtml + `<div class="table-wrap"><table>
     <thead><tr><th>#</th>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Status</th></tr></thead>
-    <tbody>${rows.slice(0,20).map((r,i)=>{
-      const cpf=String(r.cpf||r.CPF||'').trim();
-      const nome=String(r.nome||r.Nome||r.NOME||'').trim();
-      const hasErr=!nome||!cpf||existingCPFs.has(normStr(cpf));
-      return `<tr style="${hasErr?'background:var(--red-light)':''}"><td>${i+2}</td>${cols.map(c=>`<td>${esc(String(r[c]||''))}</td>`).join('')}<td>${hasErr?'<span class="badge badge-red">Erro</span>':'<span class="badge badge-green">OK</span>'}</td></tr>`;
-    }).join('')}</tbody>
-  </table></div>${rows.length>20?`<p class="text-muted text-sm" style="margin-top:8px">Mostrando 20 de ${rows.length} linhas</p>`:''}`;
-  document.getElementById('imp-errors').innerHTML = errors.length ? errors.map(e=>`<div class="badge badge-red" style="margin:3px;display:inline-block">Linha ${e.row}: ${e.errors.join(', ')}</div>`).join('') : '<p class="text-muted text-sm">Nenhum erro!</p>';
+    <tbody>${tableRows}</tbody>
+  </table></div>${rows.length>50?`<p class="text-muted text-sm" style="margin-top:8px">Mostrando 50 de ${rows.length} linhas</p>`:''}`;
+
+  // ── Log de erros enriquecido com botão de ajuste
+  const errEl = document.getElementById('imp-errors');
+  if(!errors.length) {
+    errEl.innerHTML = '<p class="text-muted text-sm">✅ Nenhum erro registrado.</p>';
+    _setImpErrorsVisible(false);
+    return;
+  }
+  _setImpErrorsVisible(true);
+  errEl.innerHTML = `
+    <p class="text-muted text-sm" style="margin-bottom:12px">
+      <strong>${errors.length} registro(s)</strong> não podem ser importados. Clique em <strong>"Ajustar"</strong> para corrigir cada um diretamente aqui, ou ignore-os — apenas os registros válidos serão importados.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${errors.map(e => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--red-light);border:1px solid #fca5a5;border-radius:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:.87rem;color:var(--red)">Linha ${e.row} — ${esc(e.nome)}</div>
+            <div style="font-size:.8rem;color:#b91c1c;margin-top:2px">${e.errors.map(x=>`⚠ ${x}`).join(' &nbsp;·&nbsp; ')}</div>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="openImpEditModal(${e.rowIdx})" style="white-space:nowrap;flex-shrink:0">
+            ✏ Ajustar
+          </button>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+// ── Abre mini-modal de edição para a linha com erro
+function openImpEditModal(rowIdx) {
+  _impEditIdx = rowIdx;
+  const r = importPreviewData[rowIdx];
+  const dados = r.__extracted || extractImportRow(r);
+
+  const existingCPFs = new Set(
+    DB.candidatos()
+      .filter((_,i) => {
+        // Exclui o próprio CPF se já havia sido ajustado antes (evita falso positivo de dup)
+        return true;
+      })
+      .map(c => normStr(c.cpf))
+  );
+
+  // Descobre os erros atuais para orientar o usuário
+  const rowErrors = [];
+  if(!dados.nome) rowErrors.push('Nome ausente');
+  if(!dados.cpf)  rowErrors.push('CPF ausente');
+  else if(existingCPFs.has(normStr(dados.cpf))) rowErrors.push(`CPF já cadastrado no sistema (${dados.cpf})`);
+
+  document.getElementById('imp-edit-title').textContent = `Ajustar Linha ${rowIdx+2}`;
+  document.getElementById('imp-edit-errs').innerHTML = rowErrors.map(e=>`<span style="color:#b91c1c;font-size:.8rem">⚠ ${e}</span>`).join('<br>');
+  document.getElementById('imp-edit-nome').value  = dados.nome  || '';
+  document.getElementById('imp-edit-cpf').value   = dados.cpf   || '';
+  document.getElementById('imp-edit-tel').value   = dados.telefone || '';
+  document.getElementById('imp-edit-cargo').value = dados.cargo || '';
+  document.getElementById('imp-edit-cidade').value= dados.cidade|| '';
+  document.getElementById('imp-edit-obs').value   = dados.observacoes || '';
+  openModal('modal-imp-edit');
+}
+
+// ── Salva o ajuste de volta em importPreviewData e re-renderiza o preview
+function saveImpEdit() {
+  if(_impEditIdx === null) return;
+  const r = importPreviewData[_impEditIdx];
+
+  // Aplica os valores editados diretamente nos dados extraídos (sobrescreve)
+  const dados = r.__extracted || extractImportRow(r);
+  dados.nome       = document.getElementById('imp-edit-nome').value.trim();
+  dados.cpf        = document.getElementById('imp-edit-cpf').value.trim();
+  dados.telefone   = document.getElementById('imp-edit-tel').value.trim();
+  dados.cargo      = document.getElementById('imp-edit-cargo').value.trim();
+  dados.cidade     = document.getElementById('imp-edit-cidade').value.trim();
+  dados.observacoes= document.getElementById('imp-edit-obs').value.trim();
+  r.__extracted = dados;
+
+  closeModal('modal-imp-edit');
+  _impEditIdx = null;
+  renderImportPreview(importPreviewData);
+  toast('Registro ajustado! Revise o preview abaixo.', 'success');
 }
 
 async function confirmImport() {
@@ -2472,36 +2729,49 @@ async function confirmImport() {
   const existingCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
   let cands = DB.candidatos();
   let added = 0;
-  importPreviewData.forEach(r => {
-    const cpf = String(r.cpf||r.CPF||'').trim();
-    const nome = String(r.nome||r.Nome||r.NOME||'').trim();
-    if(!nome||!cpf||existingCPFs.has(normStr(cpf))) return;
-    const mapStatus = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','em analise':'EM_ANALISE','em_analise':'EM_ANALISE','banco talentos':'BANCO_TALENTOS','banco_talentos':'BANCO_TALENTOS'};return m[normStr(String(v||''))]||'EM_ANALISE';};
-    const mapAnt = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO'};return m[normStr(String(v||''))]||'APROVADO';};
-    const mapRec = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','nunca':'NUNCA_TRABALHOU_NA_GPS','nunca_trabalhou_na_gps':'NUNCA_TRABALHOU_NA_GPS'};return m[normStr(String(v||''))]||'NUNCA_TRABALHOU_NA_GPS';};
+  const skipped = [];
+  importPreviewData.forEach((r, i) => {
+    // Usa dados pré-extraídos (possivelmente ajustados pelo usuário)
+    const dados = r.__extracted || extractImportRow(r);
+    const { nome, cpf } = dados;
+    if(!nome || !cpf || existingCPFs.has(normStr(cpf))) {
+      const errs = [];
+      if(!nome) errs.push('Nome ausente');
+      if(!cpf)  errs.push('CPF ausente');
+      else if(existingCPFs.has(normStr(cpf))) errs.push('CPF duplicado');
+      skipped.push({ row: i+2, nome: nome||'(sem nome)', errs });
+      return;
+    }
     const c = {
       id:uid(), feiraoId:fid, feiraoNome:f.nomeFeirao, feiraoLocal:f.localEvento,
-      nome, cpf, telefone:String(r.telefone||r.Telefone||'').trim(),
-      cr:String(r.cr||r.CR||'').trim(),
-      cargo:String(r.cargo||r.Cargo||'').trim(),
-      cidade:String(r.cidade||r.Cidade||'').trim(),
-      endereco:String(r.endereco||r.Endereco||'').trim(),
-      admitido:['s','sim','yes','1','true'].includes(normStr(String(r.admitido||r.Admitido||''))),
-      statusProcesso:mapStatus(r.statusProcesso||r.status||''),
-      antecedentes:mapAnt(r.antecedentes||r.Antecedentes||''),
-      recontratacao:mapRec(r.recontratacao||r.Recontratacao||''),
-      motivoReprovacao:String(r.motivoReprovacao||r.motivo||'').trim(),
-      observacoes:String(r.observacoes||r.Observacoes||'').trim(),
+      ...dados,
       recrutadorId:f.recrutadorId, recrutadorNome:f.recrutadorNome,
-      bancoTalentosFlag: ['s','sim','yes','1','true'].includes(normStr(String(r.bancoTalentos||r.BancoTalentos||r.banco_talentos||r['Banco Talentos']||''))),
     };
     applyRuleEngine(c);
     cands.push(c);
     existingCPFs.add(normStr(cpf));
     added++;
   });
-  DB.saveCandidatos(cands);
-  toast(`${added} candidato(s) importado(s)!`,'success');
+  await DB.saveCandidatos(cands);
+  toast(`${added} candidato(s) importado(s)${skipped.length ? ` · ${skipped.length} ignorado(s)` : ''}!`, added > 0 ? 'success' : 'error');
+
+  // Mostra resumo dos ignorados no log de erros
+  if(skipped.length) {
+    _setImpErrorsVisible(true);
+    document.getElementById('imp-errors').innerHTML = `
+      <p class="text-muted text-sm" style="margin-bottom:10px"><strong>${skipped.length} registro(s) foram ignorados</strong> por erros não corrigidos:</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${skipped.map(s=>`
+          <div style="padding:8px 12px;background:var(--red-light);border:1px solid #fca5a5;border-radius:8px;font-size:.82rem">
+            <strong style="color:var(--red)">Linha ${s.row} — ${esc(s.nome)}</strong>
+            <span style="color:#b91c1c;margin-left:8px">${s.errs.map(e=>`⚠ ${e}`).join(' · ')}</span>
+          </div>`).join('')}
+      </div>`;
+  } else {
+    _setImpErrorsVisible(false);
+    document.getElementById('imp-errors').innerHTML = '<p class="text-muted text-sm">✅ Todos os registros foram importados com sucesso.</p>';
+  }
+
   document.getElementById('btn-imp-confirm').style.display='none';
   importPreviewData=[];
   document.getElementById('imp-preview').innerHTML='<p class="text-muted text-sm text-center" style="padding:30px 0">Importação concluída!</p>';
@@ -2511,12 +2781,12 @@ async function confirmImport() {
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ['nome','cpf','telefone','cargo','cidade','endereco','admitido','statusProcesso','antecedentes','recontratacao','bancoTalentos'],
-    ['João Silva','123.456.789-00','(11) 91234-5678','Auxiliar de Limpeza','São Paulo - SP','Av. Paulista, 1000 – SP','NÃO','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','NÃO'],
-    ['Maria Souza','987.654.321-00','(11) 98765-4321','Vigilante','Rio de Janeiro - RJ','Rua das Flores, 50 – RJ','SIM','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','SIM'],
+    ['nome','cpf','telefone','cargo','cidade','endereco','admitido','statusProcesso','antecedentes','recontratacao','bancoTalentos','dataInclusao'],
+    ['João Silva','123.456.789-00','(11) 91234-5678','Auxiliar de Limpeza','São Paulo - SP','Av. Paulista, 1000 – SP','NÃO','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','NÃO','15/01/2025'],
+    ['Maria Souza','987.654.321-00','(11) 98765-4321','Vigilante','Rio de Janeiro - RJ','Rua das Flores, 50 – RJ','SIM','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','SIM','16/01/2025'],
   ]);
   ws['!cols'] = [
-    {wch:22},{wch:16},{wch:18},{wch:10},{wch:18},{wch:14},{wch:26},{wch:12}
+    {wch:22},{wch:16},{wch:18},{wch:22},{wch:18},{wch:30},{wch:10},{wch:14},{wch:14},{wch:24},{wch:12},{wch:14}
   ];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
   XLSX.writeFile(wb,'modelo_candidatos_gps.xlsx');
@@ -2535,7 +2805,7 @@ function exportFeiraosExcel() {
 }
 
 function exportCandidatosExcel() {
-  const data = getFilteredCandidatos().map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':c.recrutadorNome,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Banco Talentos':c.bancoTalentosFlag?'SIM':'NÃO'}));
+  const data = getFilteredCandidatos().map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':c.recrutadorNome,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Banco Talentos':c.bancoTalentosFlag?'SIM':'NÃO','Data Inclusão':fmt(c.dataInclusao)||''}));
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
   XLSX.writeFile(wb,`candidatos_gps_${today()}.xlsx`);
@@ -3078,6 +3348,49 @@ function openDayModal(dateStr) {
 function esc(s='') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmt(d) { if(!d) return ''; try{const [y,m,day]=d.split('-');return `${day}/${m}/${y}`;}catch{return d;} }
 function today() { return new Date().toISOString().slice(0,10); }
+
+// ── Normaliza um texto para comparação "inteligente" de colunas
+// (minúsculas, sem acento, sem espaços/underscore/hífen/pontuação)
+function normColName(s) {
+  return String(s||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]/g,'');
+}
+
+// ── Busca o valor de uma linha de planilha testando vários "nomes possíveis"
+// de coluna, ignorando maiúsculas/minúsculas, acentos, espaços e símbolos.
+// Colunas extras que não estiverem em `names` são simplesmente ignoradas.
+function getCol(row, ...names) {
+  if(!row) return '';
+  if(!row.__normKeys) {
+    row.__normKeys = {};
+    Object.keys(row).forEach(k => { row.__normKeys[normColName(k)] = k; });
+  }
+  for(const name of names) {
+    const realKey = row.__normKeys[normColName(name)];
+    if(realKey !== undefined && String(row[realKey]).trim() !== '') return row[realKey];
+  }
+  return '';
+}
+
+// ── Converte uma célula de data (Date do Excel, número serial ou texto
+// em DD/MM/AAAA, DD-MM-AAAA ou AAAA-MM-DD) para o formato AAAA-MM-DD
+function parseDateCell(v) {
+  if(v===undefined || v===null || v==='') return '';
+  if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  if(typeof v === 'number') {
+    // Número de série do Excel (dias desde 1899-12-30)
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if(!isNaN(d)) return d.toISOString().slice(0,10);
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if(m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  return '';
+}
 
 function statusBadge(s) {
   const map = {APROVADO:'badge-green',REPROVADO:'badge-red',EM_ANALISE:'badge-yellow',BANCO_TALENTOS:'badge-purple'};
