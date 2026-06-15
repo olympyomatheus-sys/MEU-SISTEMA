@@ -623,9 +623,82 @@ thead th {
   top: 0;
   z-index: 2;
 }
+#login-screen {
+  position: fixed; inset: 0; z-index: 99999;
+  background: linear-gradient(135deg, #07111f 0%, #0d2142 60%, #1a3a6b 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+#login-box {
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 20px; padding: 48px 40px; width: 100%; max-width: 380px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.5); backdrop-filter: blur(12px);
+  display: flex; flex-direction: column; align-items: center;
+}
+#login-box .login-logo { font-size: 2.2rem; font-weight: 900; color: #fff; letter-spacing: 1px; margin-bottom: 4px; }
+#login-box .login-sub  { color: #60a5fa; font-size: .78rem; margin-bottom: 32px; letter-spacing: .5px; }
+#login-box label { width:100%; font-size: .78rem; font-weight: 700; color: rgba(191,219,254,.8); margin-bottom: 6px; display: block; letter-spacing: .4px; text-transform: uppercase; }
+#login-box input[type=password] {
+  width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.08); color: #fff; font-size: .95rem; outline: none;
+  margin-bottom: 10px; transition: border .2s, box-shadow .2s; letter-spacing: 2px;
+}
+#login-box input[type=password]:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
+#login-box input[type=password]::placeholder { letter-spacing: 0; color: rgba(255,255,255,.3); }
+#login-error { color: #f87171; font-size: .8rem; min-height: 20px; margin-bottom: 10px; text-align: center; width: 100%; }
+#login-btn {
+  width: 100%; padding: 13px; background: #2563eb; color: #fff; border: none;
+  border-radius: 10px; font-size: .95rem; font-weight: 700; cursor: pointer;
+  transition: background .2s, box-shadow .2s; letter-spacing: .3px;
+}
+#login-btn:hover { background: #1d4ed8; box-shadow: 0 6px 20px rgba(37,99,235,.4); }
+#login-box .login-footer { margin-top: 28px; color: rgba(147,197,253,.4); font-size: .7rem; }
 </style>
 </head>
 <body>
+
+<!-- TELA DE LOGIN -->
+<div id="login-screen">
+  <div id="login-box">
+    <div class="login-logo">⬡ GRUPO GPS</div>
+    <div class="login-sub">Recrutamento &amp; Seleção · RH System</div>
+    <label for="login-senha">Senha de Acesso</label>
+    <input type="password" id="login-senha" placeholder="Digite a senha…" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <div id="login-error"></div>
+    <button id="login-btn" onclick="doLogin()">Entrar</button>
+    <div class="login-footer">Acesso restrito · GRUPO GPS © 2025</div>
+  </div>
+</div>
+<script>
+(function() {
+  const SENHA = 'grupogps@';
+  const SESSION_KEY = 'gps_auth';
+  function doLogin() {
+    const val = document.getElementById('login-senha').value.toLowerCase();
+    if (val === SENHA) {
+      sessionStorage.setItem(SESSION_KEY, '1');
+      document.getElementById('login-screen').style.display = 'none';
+    } else {
+      const err = document.getElementById('login-error');
+      err.textContent = '⚠ Senha incorreta. Tente novamente.';
+      document.getElementById('login-senha').value = '';
+      document.getElementById('login-senha').focus();
+      setTimeout(() => { err.textContent = ''; }, 3000);
+    }
+  }
+  window.doLogin = doLogin;
+  function doLogoff() {
+    sessionStorage.removeItem(SESSION_KEY);
+    document.getElementById("login-senha").value = "";
+    document.getElementById("login-error").textContent = "";
+    document.getElementById("login-screen").style.display = "flex";
+    setTimeout(() => document.getElementById("login-senha").focus(), 100);
+  }
+  window.doLogoff = doLogoff;
+  if (sessionStorage.getItem(SESSION_KEY) === '1') {
+    document.getElementById('login-screen').style.display = 'none';
+  }
+})();
+</script>
 
 <!-- SIDEBAR -->
 <aside id="sidebar">
@@ -664,7 +737,10 @@ thead th {
       Recrutadores
     </div>
   </nav>
-  <div id="sidebar-footer">v3.0 · GRUPO GPS · 2025</div>
+  <div id="sidebar-footer" style="display:flex;flex-direction:column;gap:10px">
+    <button onclick="doLogoff()" style="display:flex;align-items:center;gap:8px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);color:#f87171;border-radius:9px;padding:9px 14px;cursor:pointer;font-size:.82rem;font-weight:600;width:100%;transition:background .2s" onmouseover="this.style.background='rgba(220,38,38,.3)'" onmouseout="this.style.background='rgba(220,38,38,.15)'"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sair do Sistema</button>
+    <span style="color:rgba(147,197,253,.4);font-size:.7rem">v3.0 · GRUPO GPS · 2025</span>
+  </div>
 </aside>
 
 <!-- MODAL: AJUSTE DE REGISTRO COM ERRO NA IMPORTAÇÃO -->
@@ -1586,11 +1662,12 @@ async function seedIfEmpty() {
 // RULE ENGINE
 // ═══════════════════════════════════════
 function applyRuleEngine(c) {
-  if (c.antecedentes === 'REPROVADO') c.statusProcesso = 'REPROVADO';
-  // Banco de Talentos bloqueado se houver qualquer reprovação
-  const temReprovacao = c.statusProcesso === 'REPROVADO' || c.antecedentes === 'REPROVADO' || c.recontratacao === 'REPROVADO';
-  if (temReprovacao && c.statusProcesso === 'BANCO_TALENTOS') c.statusProcesso = 'REPROVADO';
-  c.bancoTalentosFlag = c.statusProcesso === 'BANCO_TALENTOS' && !temReprovacao;
+  // Não altera o status automaticamente — apenas sinaliza com aviso
+  const temReprovacao = c.antecedentes === 'REPROVADO' || c.recontratacao === 'REPROVADO';
+  if (temReprovacao) {
+    setTimeout(() => toast('⚠ Atenção: candidato possui reprovação em antecedentes ou ex-colaborador.', 'info'), 300);
+  }
+  c.bancoTalentosFlag = c.statusProcesso === 'BANCO_TALENTOS';
 }
 
 // ═══════════════════════════════════════
@@ -1998,10 +2075,7 @@ async function saveCandidato() {
   if(!status){toast('Status do processo é obrigatório','error');return;}
   if(!ant){toast('Antecedentes é obrigatório','error');return;}
   if(!recont){toast('Pesquisa de Ex-Colaborador é obrigatória','error');return;}
-  // Bloqueia BT se houver qualquer reprovação
-  if(status === 'BANCO_TALENTOS' && (ant==='REPROVADO' || recont==='REPROVADO')) {
-    toast('Banco de Talentos não permitido para candidatos com reprovação.','error');return;
-  }
+  // Aviso apenas, sem bloquear
   const f = DB.feiraos().find(x=>x.id===fid);
   if(!f){toast('Feirão não encontrado','error');return;}
   let cands = DB.candidatos();
@@ -2536,7 +2610,7 @@ const IMPORT_FIELD_MAP = {
 // ── Extrai e normaliza os dados de uma linha da planilha, usando apenas
 // os campos definidos em IMPORT_FIELD_MAP (colunas extras são ignoradas).
 function extractImportRow(r) {
-  const mapStatus = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','em analise':'EM_ANALISE','em_analise':'EM_ANALISE','banco talentos':'BANCO_TALENTOS','banco_talentos':'BANCO_TALENTOS'};return m[normStr(String(v||''))]||'EM_ANALISE';};
+  const mapStatus = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','em analise':'EM_ANALISE','em_analise':'EM_ANALISE','banco talentos':'BANCO_TALENTOS','banco_talentos':'BANCO_TALENTOS','banco de talentos':'BANCO_TALENTOS','bancodetalentos':'BANCO_TALENTOS','bt':'BANCO_TALENTOS'};return m[normStr(String(v||''))]||'EM_ANALISE';};
   const mapAnt = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO'};return m[normStr(String(v||''))]||'APROVADO';};
   const mapRec = v => {const m={'aprovado':'APROVADO','reprovado':'REPROVADO','nunca':'NUNCA_TRABALHOU_NA_GPS','nunca_trabalhou_na_gps':'NUNCA_TRABALHOU_NA_GPS'};return m[normStr(String(v||''))]||'NUNCA_TRABALHOU_NA_GPS';};
   const isSim = v => ['s','sim','yes','1','true','x'].includes(normStr(String(v||'')));
@@ -2781,12 +2855,12 @@ async function confirmImport() {
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ['nome','cpf','telefone','cargo','cidade','endereco','admitido','statusProcesso','antecedentes','recontratacao','bancoTalentos','dataInclusao'],
-    ['João Silva','123.456.789-00','(11) 91234-5678','Auxiliar de Limpeza','São Paulo - SP','Av. Paulista, 1000 – SP','NÃO','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','NÃO','15/01/2025'],
-    ['Maria Souza','987.654.321-00','(11) 98765-4321','Vigilante','Rio de Janeiro - RJ','Rua das Flores, 50 – RJ','SIM','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','SIM','16/01/2025'],
+    ['nome','cpf','telefone','cargo','cidade','endereco','admitido','statusProcesso','antecedentes','recontratacao','dataInclusao'],
+    ['João Silva','123.456.789-00','(11) 91234-5678','Auxiliar de Limpeza','São Paulo - SP','Av. Paulista, 1000 – SP','NÃO','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','15/01/2025'],
+    ['Maria Souza','987.654.321-00','(11) 98765-4321','Vigilante','Rio de Janeiro - RJ','Rua das Flores, 50 – RJ','SIM','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','16/01/2025'],
   ]);
   ws['!cols'] = [
-    {wch:22},{wch:16},{wch:18},{wch:22},{wch:18},{wch:30},{wch:10},{wch:14},{wch:14},{wch:24},{wch:12},{wch:14}
+    {wch:22},{wch:16},{wch:18},{wch:22},{wch:18},{wch:30},{wch:10},{wch:14},{wch:14},{wch:24},{wch:14}
   ];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
   XLSX.writeFile(wb,'modelo_candidatos_gps.xlsx');
