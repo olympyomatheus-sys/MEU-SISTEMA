@@ -943,10 +943,37 @@ thead th {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="exportCandidatosExcel()">Excel</button>
           <button class="btn btn-secondary btn-sm" onclick="exportCandidatosPDF()">PDF</button>
-          <button id="btn-bulk-delete" class="btn btn-danger btn-sm" onclick="bulkDeleteCandidatos()" style="display:none">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-            Excluir Selecionados (<span id="bulk-count">0</span>)
-          </button>
+          <div id="bulk-action-bar" style="display:none;align-items:center;gap:6px;flex-wrap:wrap">
+            <span id="bulk-count-label" style="font-size:.8rem;font-weight:700;color:var(--blue-700);white-space:nowrap">0 selecionados</span>
+            <select id="bulk-status-sel" style="font-size:.78rem;padding:5px 8px;border-radius:8px;border:1px solid var(--gray-300)">
+              <option value="">— Status Processo —</option>
+              <option value="APROVADO">✅ Aprovado</option>
+              <option value="REPROVADO">❌ Reprovado</option>
+              <option value="EM_ANALISE">🔄 Em Análise</option>
+              <option value="BANCO_TALENTOS">⭐ Banco de Talentos</option>
+            </select>
+            <select id="bulk-ant-sel" style="font-size:.78rem;padding:5px 8px;border-radius:8px;border:1px solid var(--gray-300)">
+              <option value="">— Antecedentes —</option>
+              <option value="APROVADO">Aprovado</option>
+              <option value="REPROVADO">Reprovado</option>
+            </select>
+            <select id="bulk-recont-sel" style="font-size:.78rem;padding:5px 8px;border-radius:8px;border:1px solid var(--gray-300)">
+              <option value="">— Ex-Colaborador —</option>
+              <option value="NUNCA_TRABALHOU_NA_GPS">Nunca GPS</option>
+              <option value="APROVADO">Aprovado</option>
+              <option value="REPROVADO">Reprovado</option>
+            </select>
+            <select id="bulk-admitido-sel" style="font-size:.78rem;padding:5px 8px;border-radius:8px;border:1px solid var(--gray-300)">
+              <option value="">— Admitido —</option>
+              <option value="1">✅ Sim</option>
+              <option value="0">Não</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="bulkEditCandidatos()">✔ Aplicar</button>
+            <button id="btn-bulk-delete" class="btn btn-danger btn-sm" onclick="bulkDeleteCandidatos()">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              Excluir
+            </button>
+          </div>
           <button class="btn btn-primary btn-sm" onclick="openCandModal()">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Novo Candidato
@@ -984,6 +1011,7 @@ thead th {
           <option value="1">✅ Apenas Admitidos</option>
           <option value="0">Não Admitidos</option>
         </select>
+        <input id="f-cidade-cand" type="text" placeholder="Cidade / Local…" oninput="renderCandidatos()" style="min-width:150px"/>
         <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
       </div>
       <div class="card">
@@ -1662,11 +1690,6 @@ async function seedIfEmpty() {
 // RULE ENGINE
 // ═══════════════════════════════════════
 function applyRuleEngine(c) {
-  // Não altera o status automaticamente — apenas sinaliza com aviso
-  const temReprovacao = c.antecedentes === 'REPROVADO' || c.recontratacao === 'REPROVADO';
-  if (temReprovacao) {
-    setTimeout(() => toast('⚠ Atenção: candidato possui reprovação em antecedentes ou ex-colaborador.', 'info'), 300);
-  }
   c.bancoTalentosFlag = c.statusProcesso === 'BANCO_TALENTOS';
 }
 
@@ -1727,7 +1750,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 function confirm_(msg, fn) {
   document.getElementById('confirm-msg').textContent = msg;
   const btn = document.getElementById('confirm-btn');
-  btn.onclick = () => { fn(); closeModal('modal-confirm'); };
+  btn.onclick = async () => { closeModal('modal-confirm'); await fn(); };
   openModal('modal-confirm');
 }
 
@@ -2100,6 +2123,9 @@ async function saveCandidato() {
   await DB.saveCandidatos(cands);
   closeModal('modal-cand');
   toast(editCandId?'Candidato atualizado!':'Candidato salvo!','success');
+  if(ant==='REPROVADO' || recont==='REPROVADO') {
+    setTimeout(() => toast('⚠ Atenção: candidato possui reprovação em antecedentes ou ex-colaborador.','info'), 400);
+  }
   renderCandidatos();
 }
 
@@ -2164,6 +2190,7 @@ function getFilteredCandidatos() {
   const qa     = document.getElementById('f-ant-cand')?.value||'';
   const qrecont= document.getElementById('f-recont-cand')?.value||'';
   const qadm   = document.getElementById('f-admitido-cand')?.value||'';
+  const qcidade= normStr(document.getElementById('f-cidade-cand')?.value||'');
 
   return cands.filter(c => {
     // ── Filtro de status consolidado ──────────────────────────────────
@@ -2182,7 +2209,8 @@ function getFilteredCandidatos() {
       statusOk &&
       (!qa     || c.antecedentes === qa) &&
       (!qrecont|| c.recontratacao === qrecont) &&
-      (!qadm   || (qadm === '1' ? c.admitido : !c.admitido))
+      (!qadm   || (qadm === '1' ? c.admitido : !c.admitido)) &&
+      (!qcidade|| normStr(c.cidade||c.feiraoLocal||'').includes(qcidade))
     );
   });
 }
@@ -2216,7 +2244,7 @@ function renderCandidatos() {
 }
 
 function clearCandFilters() {
-  ['f-nome-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-nome-cand','f-cidade-cand'].forEach(id=>document.getElementById(id).value='');
   ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand'].forEach(id=>document.getElementById(id).value='');
   renderCandidatos();
 }
@@ -2224,11 +2252,11 @@ function clearCandFilters() {
 function updateBulkBar() {
   const checked = document.querySelectorAll('.cand-chk:checked');
   const total   = document.querySelectorAll('.cand-chk');
-  const btn  = document.getElementById('btn-bulk-delete');
-  const count= document.getElementById('bulk-count');
+  const bar  = document.getElementById('bulk-action-bar');
+  const label= document.getElementById('bulk-count-label');
   const chkAll = document.getElementById('cand-check-all');
-  if(btn)  btn.style.display = checked.length > 0 ? '' : 'none';
-  if(count) count.textContent = checked.length;
+  if(bar)   bar.style.display   = checked.length > 0 ? 'flex' : 'none';
+  if(label) label.textContent   = `${checked.length} selecionado(s)`;
   if(chkAll) {
     chkAll.indeterminate = checked.length > 0 && checked.length < total.length;
     chkAll.checked = total.length > 0 && checked.length === total.length;
@@ -2240,15 +2268,76 @@ function toggleAllCandidatos(chk) {
   updateBulkBar();
 }
 
-function bulkDeleteCandidatos() {
+async function bulkDeleteCandidatos() {
   const ids = [...document.querySelectorAll('.cand-chk:checked')].map(c => c.dataset.id);
   if(!ids.length) return;
+  const btnDel = document.getElementById('btn-bulk-delete');
   confirm_(`Excluir ${ids.length} candidato(s) selecionado(s)? Essa ação não pode ser desfeita.`, async () => {
-    const idSet = new Set(ids);
-    await DB.saveCandidatos(DB.candidatos().filter(c => !idSet.has(c.id)));
-    toast(`${ids.length} candidato(s) excluído(s)!`, 'success');
-    renderCandidatos();
+    if(btnDel) { btnDel.disabled = true; btnDel.textContent = 'Excluindo…'; }
+    try {
+      const idSet = new Set(ids);
+      const cands = DB.candidatos().filter(c => !idSet.has(c.id));
+      window._cache.candidatos = cands;
+      _LS.set('candidatos', cands);
+      renderCandidatos();
+      await DB.saveCandidatos(cands);
+      toast(`${ids.length} candidato(s) excluído(s)!`, 'success');
+    } catch(e) {
+      toast('Erro ao excluir: ' + (e.message||'tente novamente'), 'error');
+      if(window._initSupabase) await window._initSupabase();
+      renderCandidatos();
+    } finally {
+      if(btnDel) { btnDel.disabled = false; btnDel.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg> Excluir'; }
+    }
   });
+}
+
+async function bulkEditCandidatos() {
+  const ids = new Set([...document.querySelectorAll('.cand-chk:checked')].map(c => c.dataset.id));
+  if(!ids.size) return;
+  const novoStatus  = document.getElementById('bulk-status-sel').value;
+  const novoAnt     = document.getElementById('bulk-ant-sel').value;
+  const novoRecont  = document.getElementById('bulk-recont-sel').value;
+  const novoAdmitido= document.getElementById('bulk-admitido-sel').value;
+  if(!novoStatus && !novoAnt && !novoRecont && novoAdmitido==='') {
+    toast('Selecione ao menos um campo para alterar.', 'error'); return;
+  }
+  if(!ids.size) return;
+
+  // Botão de aplicar desabilitado durante o save
+  const btnAplicar = document.querySelector('#bulk-action-bar .btn-primary');
+  if(btnAplicar) { btnAplicar.disabled = true; btnAplicar.textContent = 'Salvando…'; }
+
+  try {
+    let cands = DB.candidatos().map(c => {
+      if(!ids.has(c.id)) return c;
+      const updated = {...c};
+      if(novoStatus)       updated.statusProcesso = novoStatus;
+      if(novoAnt)          updated.antecedentes   = novoAnt;
+      if(novoRecont)       updated.recontratacao  = novoRecont;
+      if(novoAdmitido!=='') updated.admitido      = novoAdmitido === '1';
+      applyRuleEngine(updated);
+      return updated;
+    });
+    // Atualiza cache local imediatamente para a tela responder rápido
+    window._cache.candidatos = cands;
+    _LS.set('candidatos', cands);
+    renderCandidatos();
+    // Aguarda confirmação do banco
+    await DB.saveCandidatos(cands);
+    document.getElementById('bulk-status-sel').value  = '';
+    document.getElementById('bulk-ant-sel').value     = '';
+    document.getElementById('bulk-recont-sel').value  = '';
+    document.getElementById('bulk-admitido-sel').value= '';
+    toast(`${ids.size} candidato(s) atualizados com sucesso!`, 'success');
+  } catch(e) {
+    toast('Erro ao salvar: ' + (e.message||'tente novamente'), 'error');
+    // Recarrega do banco para garantir consistência
+    if(window._initSupabase) await window._initSupabase();
+    renderCandidatos();
+  } finally {
+    if(btnAplicar) { btnAplicar.disabled = false; btnAplicar.textContent = '✔ Aplicar'; }
+  }
 }
 
 // ═══════════════════════════════════════
@@ -2656,17 +2745,22 @@ function _setImpErrorsVisible(hasErrors) {
 function renderImportPreview(rows) {
   const errors = [];
   const valid = [];
-  const existingCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
+  const dbCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
+  // CPFs já vistos dentro da própria planilha (detecta duplicatas internas)
+  const seenInSheet = new Set();
 
   rows.forEach((r,i) => {
-    const dados = extractImportRow(r);
+    // Usa dados já ajustados pelo usuário se existirem, senão extrai da linha original
+    if(!r.__extracted) r.__extracted = extractImportRow(r);
+    const dados = r.__extracted;
     const { nome, cpf } = dados;
-    // Guarda dados extraídos na própria linha para reuso
-    r.__extracted = dados;
+    const cpfNorm = normStr(cpf);
     const rowErrors = [];
     if(!nome) rowErrors.push('Nome ausente');
     if(!cpf)  rowErrors.push('CPF ausente');
-    else if(existingCPFs.has(normStr(cpf))) rowErrors.push(`CPF duplicado (${cpf})`);
+    else if(dbCPFs.has(cpfNorm)) rowErrors.push(`CPF já cadastrado no sistema (${cpf})`);
+    else if(seenInSheet.has(cpfNorm)) rowErrors.push(`CPF duplicado na planilha (${cpf})`);
+    if(cpfNorm) seenInSheet.add(cpfNorm);
     if(rowErrors.length) {
       errors.push({ rowIdx: i, row: i+2, nome: nome||'(sem nome)', cpf: cpf||'(sem CPF)', errors: rowErrors });
     } else {
@@ -2695,11 +2789,11 @@ function renderImportPreview(rows) {
     const dados = r.__extracted || extractImportRow(r);
     const cpf = dados.cpf;
     const nome = dados.nome;
-    const hasErr = !nome || !cpf || existingCPFs.has(normStr(cpf));
+    const hasErr = !nome || !cpf || dbCPFs.has(normStr(cpf));
     const rowErrs = [];
     if(!nome) rowErrs.push('Nome ausente');
     if(!cpf) rowErrs.push('CPF ausente');
-    else if(existingCPFs.has(normStr(cpf))) rowErrs.push('CPF duplicado');
+    else if(dbCPFs.has(normStr(cpf))) rowErrs.push('CPF duplicado');
     return `<tr style="${hasErr?'background:var(--red-light)':''}">
       <td>${i+2}</td>
       ${cols.map(c=>`<td>${esc(String(r[c]||''))}</td>`).join('')}
@@ -2734,9 +2828,14 @@ function renderImportPreview(rows) {
             <div style="font-weight:700;font-size:.87rem;color:var(--red)">Linha ${e.row} — ${esc(e.nome)}</div>
             <div style="font-size:.8rem;color:#b91c1c;margin-top:2px">${e.errors.map(x=>`⚠ ${x}`).join(' &nbsp;·&nbsp; ')}</div>
           </div>
-          <button class="btn btn-danger btn-sm" onclick="openImpEditModal(${e.rowIdx})" style="white-space:nowrap;flex-shrink:0">
-            ✏ Ajustar
-          </button>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-danger btn-sm" onclick="openImpEditModal(${e.rowIdx})" style="white-space:nowrap">
+              ✏ Ajustar
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="removeImpRow(${e.rowIdx})" style="white-space:nowrap;color:var(--red);border-color:#fca5a5" title="Remover este registro da importação">
+              🗑 Excluir
+            </button>
+          </div>
         </div>
       `).join('')}
     </div>`;
@@ -2793,6 +2892,19 @@ function saveImpEdit() {
   _impEditIdx = null;
   renderImportPreview(importPreviewData);
   toast('Registro ajustado! Revise o preview abaixo.', 'success');
+}
+
+function removeImpRow(rowIdx) {
+  importPreviewData.splice(rowIdx, 1);
+  if(!importPreviewData.length) {
+    document.getElementById('imp-preview').innerHTML = '<p class="text-muted text-sm text-center" style="padding:30px 0">Nenhum registro na fila.</p>';
+    document.getElementById('imp-status').innerHTML = '';
+    document.getElementById('btn-imp-confirm').style.display = 'none';
+    _setImpErrorsVisible(false);
+    return;
+  }
+  renderImportPreview(importPreviewData);
+  toast('Registro removido da importação.', 'info');
 }
 
 async function confirmImport() {
