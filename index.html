@@ -102,7 +102,7 @@ if (!window._useLocalFallback) {
       }
       // Só configura realtime para tabelas que carregaram com sucesso
       tables.forEach(t => {
-        if (!anyFailed || window._cacheReady[t]) {
+        if (window._cacheReady[t]) {
           try { _setupRealtime(t); } catch(e) { console.warn('Realtime setup failed for', t, e); }
         }
       });
@@ -112,31 +112,37 @@ if (!window._useLocalFallback) {
     };
 
     window._sbSaveBatch = async (table, newArr) => {
-      // Busca IDs atuais direto do banco para garantir que deletes funcionem
-      // mesmo quando o cache local estiver desatualizado (outro PC inseriu algo)
-      const { data: remoteRows, error: fetchErr } = await _sb.from(table).select('id');
-      const remoteIds = fetchErr ? [] : (remoteRows || []).map(r => r.id);
-      const newIds = new Set(newArr.map(x => x.id));
-
-      // Upsert de todos os registros novos/editados
-      if (newArr.length) {
-        const rows = newArr.map(item => ({ id: item.id, data: item }));
-        const { error } = await _sb.from(table).upsert(rows, { onConflict: 'id' });
-        if (error) console.error('Supabase upsert error', table, error.message || JSON.stringify(error));
-      }
-
-      // Deleta apenas registros que existem no banco mas não estão no newArr
-      const idsToDelete = remoteIds.filter(id => !newIds.has(id));
-      if (idsToDelete.length) {
-        const { error } = await _sb.from(table).delete().in('id', idsToDelete);
-        if (error) console.error('Supabase delete error', table, error.message || JSON.stringify(error));
-      }
-
-      // Se newArr estiver vazio mas havia registros remotos, limpa a tabela
-      if (newArr.length === 0 && remoteIds.length > 0) {
-        const { error } = await _sb.from(table).delete().in('id', remoteIds);
+      // ── RESET TOTAL EXPLÍCITO: só usado pela função "Zerar todos os dados".
+      // Sinalizado por window._allowFullReset para nunca ser disparado por acidente
+      // (ex: array vazio por bug de carregamento) nem por condição de corrida.
+      if (newArr.length === 0) {
+        if (!window._allowFullReset) {
+          console.warn(`[${table}] _sbSaveBatch recebeu array vazio sem _allowFullReset — ignorando para evitar apagar dados de outros usuários.`);
+          return;
+        }
+        const { error } = await _sb.from(table).delete().neq('id', '');
         if (error) console.error('Supabase delete-all error', table, error.message || JSON.stringify(error));
+        return;
       }
+
+      // ── UPSERT APENAS: salva/atualiza os registros do array.
+      // IMPORTANTE: não fazemos mais "delete por diferença" aqui. Comparar o array
+      // local contra o banco e apagar o que "sobra" é inseguro em uso multiusuário:
+      // se outra pessoa criou um registro novo entre minha leitura e meu save, esse
+      // registro seria apagado por engano. Exclusões agora são sempre explícitas,
+      // feitas por _sbDeleteByIds com o ID exato do item que o usuário excluiu.
+      const rows = newArr.map(item => ({ id: item.id, data: item }));
+      const { error: upsertErr } = await _sb.from(table).upsert(rows, { onConflict: 'id' });
+      if (upsertErr) console.error('Supabase upsert error', table, upsertErr.message || JSON.stringify(upsertErr));
+    };
+
+    // ── DELETE EXPLÍCITO POR ID(s): única forma seguro de excluir no banco.
+    // Sempre aponta para IDs específicos que o usuário pediu para excluir,
+    // nunca depende de comparar o array local inteiro contra o estado remoto.
+    window._sbDeleteByIds = async (table, ids) => {
+      if (!ids || !ids.length) return;
+      const { error } = await _sb.from(table).delete().in('id', ids);
+      if (error) console.error('Supabase delete error', table, error.message || JSON.stringify(error));
     };
 
   } catch(e) {
@@ -181,6 +187,7 @@ if (window._useLocalFallback) {
   --blue-50: #eff6ff;
   --gray-900: #111827;
   --gray-700: #374151;
+  --gray-600: #4b5563;
   --gray-500: #6b7280;
   --gray-300: #d1d5db;
   --gray-100: #f3f4f6;
@@ -591,9 +598,8 @@ hr { border: none; border-top: 1px solid var(--gray-300); margin: 16px 0; }
 #page-feiraos .table-wrap,
 #page-talentos .table-wrap {
   overflow-x: auto;
-  overflow-y: visible;
-  max-height: calc(100vh - 280px);
   overflow-y: auto;
+  max-height: calc(100vh - 280px);
 }
 #page-candidatos .table-wrap::-webkit-scrollbar,
 #page-feiraos .table-wrap::-webkit-scrollbar,
@@ -1011,6 +1017,13 @@ thead th {
           <option value="1">✅ Apenas Admitidos</option>
           <option value="0">Não Admitidos</option>
         </select>
+        <select id="f-etapa-cand" onchange="renderCandidatos()">
+          <option value="">Etapa</option>
+          <option value="CAPTACAO">🎯 Captação</option>
+          <option value="OPERACAO">⚙️ Operação</option>
+          <option value="DOCUMENTACAO">📄 Documentação</option>
+          <option value="ADMITIDO">✅ Admitido</option>
+        </select>
         <input id="f-cidade-cand" type="text" placeholder="Cidade / Local…" oninput="renderCandidatos()" style="min-width:150px"/>
         <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
       </div>
@@ -1029,6 +1042,7 @@ thead th {
                 <th>Status</th>
                 <th>Antecedentes</th>
                 <th>Ex-Colaborador</th>
+                <th>Etapa</th>
                 <th>Admitido</th>
                 <th>Data Inclusão</th>
                 <th>Ações</th>
@@ -1367,7 +1381,7 @@ thead th {
         </div>
         <div class="form-group">
           <label>Status do Processo *</label>
-          <select id="mc-status" onchange="toggleMotivoField();onStatusChange()">
+          <select id="mc-status">
             <option value="">Selecione…</option>
             <option value="APROVADO">Aprovado</option>
             <option value="REPROVADO">Reprovado</option>
@@ -1401,6 +1415,20 @@ thead th {
             <input type="checkbox" id="mc-admitido" style="width:auto;border-radius:4px"/>
             <strong>✅ Candidato Admitido no Feirão</strong>
           </label>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Etapa do Processo</label>
+          <select id="mc-etapa">
+            <option value="">Selecione a etapa…</option>
+            <option value="CAPTACAO">🎯 Captação</option>
+            <option value="OPERACAO">⚙️ Operação</option>
+            <option value="DOCUMENTACAO">📄 Documentação</option>
+            <option value="ADMITIDO">✅ Admitido</option>
+          </select>
+        </div>
+        <div class="form-group" id="mc-cr-wrap" style="grid-column:1/-1;display:none">
+          <label>CR – Contrato <span style="font-weight:400;color:var(--gray-500);font-size:.78rem">(número do contrato)</span></label>
+          <input id="mc-cr-visible" type="text" placeholder="Ex: CR-001, 2025-001…"/>
         </div>
         <div class="form-group" style="grid-column:1/-1">
           <label>Observações</label>
@@ -1600,6 +1628,35 @@ const DB = {
       await window._sbSaveBatch('eventos', arr);
     } else { window._cache.eventos = arr; }
   },
+
+  // ── Exclusão explícita por ID(s): sempre aponta para o(s) item(ns) que o
+  // usuário realmente pediu para excluir. Não compara arrays inteiros, então
+  // não corre o risco de apagar um registro criado por outro usuário entre
+  // a leitura local e o salvamento (ver Bloco 2 da revisão).
+  deleteFeiraosByIds: async (ids) => {
+    const remaining = DB.feiraos().filter(x => !ids.includes(x.id));
+    _LS.set('feiraos', remaining);
+    window._cache.feiraos = remaining;
+    if (!window._useLocalFallback && window._sbDeleteByIds) await window._sbDeleteByIds('feiraos', ids);
+  },
+  deleteCandidatosByIds: async (ids) => {
+    const remaining = DB.candidatos().filter(x => !ids.includes(x.id));
+    _LS.set('candidatos', remaining);
+    window._cache.candidatos = remaining;
+    if (!window._useLocalFallback && window._sbDeleteByIds) await window._sbDeleteByIds('candidatos', ids);
+  },
+  deleteRecrutadoresByIds: async (ids) => {
+    const remaining = DB.recrutadores().filter(x => !ids.includes(x.id));
+    _LS.set('recrutadores', remaining);
+    window._cache.recrutadores = remaining;
+    if (!window._useLocalFallback && window._sbDeleteByIds) await window._sbDeleteByIds('recrutadores', ids);
+  },
+  deleteEventosByIds: async (ids) => {
+    const remaining = DB.eventos().filter(x => !ids.includes(x.id));
+    _LS.set('eventos', remaining);
+    window._cache.eventos = remaining;
+    if (!window._useLocalFallback && window._sbDeleteByIds) await window._sbDeleteByIds('eventos', ids);
+  },
 };
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
@@ -1609,19 +1666,37 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 // ═══════════════════════════════════════
 function confirmClearAllData() {
   confirm_('⚠️ ATENÇÃO: Isso vai apagar TODOS os dados (feirões, candidatos, recrutadores e eventos) do banco online e local. Essa ação não pode ser desfeita. Deseja continuar?', async () => {
-    toast('Apagando dados…', 'info');
+    toast('Apagando dados… aguarde ⏳', 'info');
     try {
-      await DB.saveFeiraos([]);
-      await DB.saveCandidatos([]);
-      await DB.saveRecrutadores([]);
-      await DB.saveEventos([]);
-      ['feiraos','candidatos','recrutadores','eventos'].forEach(k => localStorage.removeItem('gps_'+k));
+      // Permite, só durante este reset explícito, que _sbSaveBatch apague tudo
+      // ao receber array vazio. Fora desse fluxo, array vazio é ignorado por
+      // segurança (ver correção do Bloco 2).
+      window._allowFullReset = true;
+      // Apaga sequencialmente — cada await garante que o Supabase confirmou antes de prosseguir
+      const tabelas = [
+        { fn: () => DB.saveFeiraos([]),      nome: 'feiraos' },
+        { fn: () => DB.saveCandidatos([]),   nome: 'candidatos' },
+        { fn: () => DB.saveRecrutadores([]), nome: 'recrutadores' },
+        { fn: () => DB.saveEventos([]),      nome: 'eventos' },
+      ];
+      for (const t of tabelas) {
+        await t.fn();
+        console.log('[Reset] ' + t.nome + ' apagado OK');
+      }
+      // Limpa localStorage e cache em memória após Supabase confirmar tudo
+      ['feiraos','candidatos','recrutadores','eventos'].forEach(k => {
+        localStorage.removeItem('gps_'+k);
+        window._cache[k] = [];
+      });
       toast('Todos os dados foram apagados! ✓', 'success');
       populateFeiraoSelects();
+      populateAnRecSelect();
       renderDashboard();
     } catch(e) {
       console.error('Erro ao zerar dados:', e);
-      toast('Erro ao apagar: ' + e.message, 'error');
+      toast('Erro ao apagar: ' + (e.message || JSON.stringify(e)), 'error');
+    } finally {
+      window._allowFullReset = false;
     }
   });
 }
@@ -1637,10 +1712,14 @@ async function seedIfEmpty() {
     {id:'r3', nome:'Mariana Costa'},
   ];
   await DB.saveRecrutadores(recs);
+  const _sy = new Date().getFullYear();
+  const _sm = String(new Date().getMonth() + 1).padStart(2, '0');
+  const _smP = String(new Date().getMonth() + 2 > 12 ? 1 : new Date().getMonth() + 2).padStart(2, '0');
+  const _syP = new Date().getMonth() + 2 > 12 ? _sy + 1 : _sy;
   const feiraos = [
-    {id:'f1', nomeFeirao:'Feirão GPS São Paulo – Junho 2024', dataEvento:'2024-06-10', localEvento:'São Paulo - SP', recrutadorId:'r1', recrutadorNome:'Ana Paula Silva', statusFeirao:'ENCERRADO', observacoes:'Evento realizado no Anhembi'},
-    {id:'f2', nomeFeirao:'Feirão GPS Campinas – Julho 2024', dataEvento:'2024-07-15', localEvento:'Campinas - SP', recrutadorId:'r2', recrutadorNome:'Carlos Eduardo Santos', statusFeirao:'ABERTO', observacoes:''},
-    {id:'f3', nomeFeirao:'Feirão GPS Rio de Janeiro – Agosto 2024', dataEvento:'2024-08-20', localEvento:'Rio de Janeiro - RJ', recrutadorId:'r3', recrutadorNome:'Mariana Costa', statusFeirao:'ABERTO', observacoes:''},
+    {id:'f1', nomeFeirao:`Feirão GPS São Paulo – ${new Date().toLocaleString('pt-BR',{month:'long'})} ${_sy}`, dataEvento:`${_sy}-${_sm}-10`, localEvento:'São Paulo - SP', recrutadorId:'r1', recrutadorNome:'Ana Paula Silva', statusFeirao:'ENCERRADO', observacoes:'Evento realizado no Anhembi'},
+    {id:'f2', nomeFeirao:`Feirão GPS Campinas – ${new Date().toLocaleString('pt-BR',{month:'long'})} ${_sy}`, dataEvento:`${_sy}-${_sm}-15`, localEvento:'Campinas - SP', recrutadorId:'r2', recrutadorNome:'Carlos Eduardo Santos', statusFeirao:'ABERTO', observacoes:''},
+    {id:'f3', nomeFeirao:`Feirão GPS Rio de Janeiro – ${new Date(_syP, parseInt(_smP)-1).toLocaleString('pt-BR',{month:'long'})} ${_syP}`, dataEvento:`${_syP}-${_smP}-05`, localEvento:'Rio de Janeiro - RJ', recrutadorId:'r3', recrutadorNome:'Mariana Costa', statusFeirao:'ABERTO', observacoes:''},
   ];
   await DB.saveFeiraos(feiraos);
   const statuses = ['APROVADO','REPROVADO','EM_ANALISE','BANCO_TALENTOS'];
@@ -1690,7 +1769,17 @@ async function seedIfEmpty() {
 // RULE ENGINE
 // ═══════════════════════════════════════
 function applyRuleEngine(c) {
+  // Garante que bancoTalentosFlag sempre reflete statusProcesso
   c.bancoTalentosFlag = c.statusProcesso === 'BANCO_TALENTOS';
+  // Se status é BANCO_TALENTOS mas há reprovação em antecedentes ou recontratação,
+  // rebaixa para EM_ANALISE para evitar estado inconsistente
+  if (c.bancoTalentosFlag && (c.antecedentes === 'REPROVADO' || c.recontratacao === 'REPROVADO')) {
+    c.statusProcesso = 'EM_ANALISE';
+    c.bancoTalentosFlag = false;
+  }
+  // Se etapa é ADMITIDO, garante que admitido=true; e vice-versa
+  if (c.etapaProcesso === 'ADMITIDO') c.admitido = true;
+  if (c.admitido && !c.etapaProcesso) c.etapaProcesso = 'ADMITIDO';
 }
 
 // ═══════════════════════════════════════
@@ -1782,7 +1871,7 @@ function populateAnRecSelect() {
     const sel = document.getElementById(id);
     if(!sel) return;
     const val = sel.value;
-    sel.innerHTML = sel.options[0].outerHTML; // mantém a primeira opção (Todos…)
+    sel.innerHTML = sel.options[0] ? sel.options[0].outerHTML : '<option value="">Todos…</option>'; // mantém a primeira opção (Todos…)
     DB.recrutadores().forEach(r => {
       const o = document.createElement('option');
       o.value = r.id; o.textContent = r.nome;
@@ -1806,13 +1895,28 @@ function acRecrutador(inputId, listId, hiddenId) {
   const showing = [...recs];
   if(input.value.trim() && !recs.find(r=>normStr(r.nome)===q)){
     const d = document.createElement('div');
-    d.innerHTML = `<em style="color:var(--blue-600)">+ Criar: "${input.value.trim()}"</em>`;
-    d.onclick = () => {
-      const newR = {id:uid(), nome:input.value.trim()};
-      const all = DB.recrutadores(); all.push(newR); DB.saveRecrutadores(all).then(()=>{});
-      input.value = newR.nome; hidden.value = newR.id;
-      list.style.display='none';
-      toast('Recrutador criado!','success');
+    const nomeDigitado = input.value.trim();
+    d.innerHTML = `<em style="color:var(--blue-600)">+ Criar: "${esc(nomeDigitado)}"</em>`;
+    d.onclick = async () => {
+      // Trava o campo durante o salvamento para impedir que o usuário avance
+      // (ex: salvar o feirão/candidato) antes do recrutador existir de fato no banco.
+      input.disabled = true;
+      list.style.display = 'none';
+      try {
+        const newR = {id:uid(), nome:nomeDigitado};
+        const all = DB.recrutadores();
+        all.push(newR);
+        await DB.saveRecrutadores(all);
+        input.value = newR.nome;
+        hidden.value = newR.id;
+        toast('Recrutador criado!','success');
+      } catch(e) {
+        console.error('Erro ao criar recrutador:', e);
+        toast('Erro ao criar recrutador. Tente novamente.','error');
+        hidden.value = '';
+      } finally {
+        input.disabled = false;
+      }
     };
     list.appendChild(d);
   }
@@ -1839,6 +1943,13 @@ document.addEventListener('click', e => {
 });
 
 function normStr(s='') { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+
+// ── Normaliza CPF para comparação de duplicidade: mantém apenas os dígitos.
+// Assim "123.456.789-00" e "12345678900" são reconhecidos como o mesmo CPF
+// (ex: um digitado manualmente com máscara e outro vindo de uma importação
+// de Excel sem formatação). Usar SOMENTE para checagem de duplicidade —
+// o CPF é sempre exibido/armazenado como o usuário digitou/importou.
+function normCPF(s) { return String(s||'').replace(/\D/g,''); }
 
 // ═══════════════════════════════════════
 // FEIRÕES CRUD
@@ -1888,13 +1999,16 @@ async function saveFeirao() {
     const idx = all.findIndex(x=>x.id===editFeiraId);
     const old = all[idx];
     all[idx] = {...old, nomeFeirao:nome, dataEvento:data, localEvento:local, enderecoCompleto, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs};
-    if(old.recrutadorId !== recId || old.recrutadorNome !== recNome) {
-      let cands = DB.candidatos();
-      cands = cands.map(c => c.feiraoId===editFeiraId ? {...c, recrutadorId:recId, recrutadorNome:recNome} : c);
-      await DB.saveCandidatos(cands);
-    }
-    let cands = DB.candidatos();
-    cands = cands.map(c => c.feiraoId===editFeiraId ? {...c, feiraoNome:nome, feiraoLocal:local} : c);
+    const recrutadorMudou = old.recrutadorId !== recId || old.recrutadorNome !== recNome;
+    let cands = DB.candidatos().map(c => {
+      if(c.feiraoId !== editFeiraId) return c;
+      return {
+        ...c,
+        feiraoNome: nome,
+        feiraoLocal: local,
+        ...(recrutadorMudou ? { recrutadorId: recId, recrutadorNome: recNome } : {})
+      };
+    });
     await DB.saveCandidatos(cands);
     // SYNC: Atualiza evento do calendário vinculado a este feirão
     if(data) {
@@ -1910,6 +2024,8 @@ async function saveFeirao() {
     const newId = uid();
     const novoFeirao = {id:newId, nomeFeirao:nome, dataEvento:data, localEvento:local, enderecoCompleto, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs};
     all.push(novoFeirao);
+    // BUG FIX: salva o feirão ANTES do evento para evitar referência órfã
+    await DB.saveFeiraos(all);
     // SYNC: Cria evento no Calendário automaticamente ao criar Feirão
     if(data) {
       const evId = uid();
@@ -1927,6 +2043,9 @@ async function saveFeirao() {
     } else {
       toast('Feirão criado!','success');
     }
+    closeModal('modal-feirao');
+    renderFeiraos();
+    return;
   }
   await DB.saveFeiraos(all);
   closeModal('modal-feirao');
@@ -1935,10 +2054,11 @@ async function saveFeirao() {
 
 function deleteFeirao(id) {
   confirm_('Tem certeza que deseja excluir este feirão e todos os seus candidatos?', async () => {
-    await DB.saveFeiraos(DB.feiraos().filter(x=>x.id!==id));
-    await DB.saveCandidatos(DB.candidatos().filter(x=>x.feiraoId!==id));
-    // Remove também o evento do calendário vinculado
-    await DB.saveEventos(DB.eventos().filter(e=>e.feiraoLink!==id));
+    const candsDoFeirao = DB.candidatos().filter(x => x.feiraoId === id).map(x => x.id);
+    const eventosDoFeirao = DB.eventos().filter(e => e.feiraoLink === id).map(e => e.id);
+    await DB.deleteFeiraosByIds([id]);
+    if (candsDoFeirao.length) await DB.deleteCandidatosByIds(candsDoFeirao);
+    if (eventosDoFeirao.length) await DB.deleteEventosByIds(eventosDoFeirao);
     toast('Feirão excluído!','success');
     renderFeiraos();
   });
@@ -2024,10 +2144,14 @@ function openCandModal(id=null) {
     document.getElementById('mc-motivo').value = c.motivoReprovacao||'';
     document.getElementById('mc-admitido').checked = c.admitido||false;
     document.getElementById('mc-obs').value = c.observacoes||'';
+    document.getElementById('mc-etapa').value = c.etapaProcesso||'';
+    document.getElementById('mc-cr-visible').value = c.cr||'';
+    toggleEtapaCR();
   } else {
-    ['mc-feirao','mc-status','mc-ant','mc-recont'].forEach(id=>document.getElementById(id).value='');
-    ['mc-nome','mc-cpf','mc-tel','mc-cr','mc-cargo','mc-cidade','mc-endereco','mc-rec','mc-motivo','mc-obs'].forEach(id=>document.getElementById(id).value='');
+    ['mc-feirao','mc-status','mc-ant','mc-recont','mc-etapa'].forEach(id=>document.getElementById(id).value='');
+    ['mc-nome','mc-cpf','mc-tel','mc-cr','mc-cargo','mc-cidade','mc-endereco','mc-rec','mc-motivo','mc-obs','mc-cr-visible'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('mc-admitido').checked = false;
+    toggleEtapaCR();
   }
   toggleMotivoField();
   openModal('modal-cand');
@@ -2072,10 +2196,43 @@ function toggleMotivoField() {
     toast('Ex-Colaborador Reprovado não é permitido no Banco de Talentos.', 'error');
   }
 }
-function onStatusChange() {}
+
+
+function toggleEtapaCR() {
+  const etapa = document.getElementById('mc-etapa').value;
+  const wrap  = document.getElementById('mc-cr-wrap');
+  if(wrap) wrap.style.display = (etapa === 'ADMITIDO') ? 'flex' : 'none';
+}
+
+function etapaLabel(e) {
+  const map = {
+    CAPTACAO:'🎯 Captação', OPERACAO:'⚙️ Operação',
+    DOCUMENTACAO:'📄 Documentação', ADMITIDO:'✅ Admitido'
+  };
+  return map[e] || e || '—';
+}
+function etapaBadge(e) {
+  const cls = {CAPTACAO:'badge-blue',OPERACAO:'badge-yellow',DOCUMENTACAO:'badge-purple',ADMITIDO:'badge-green'};
+  if(!e) return '<span class="badge badge-gray">—</span>';
+  return `<span class="badge ${cls[e]||'badge-gray'}">${etapaLabel(e)}</span>`;
+}
 document.getElementById('mc-status').addEventListener('change', toggleMotivoField);
 document.getElementById('mc-ant').addEventListener('change', toggleMotivoField);
 document.getElementById('mc-recont').addEventListener('change', toggleMotivoField);
+
+// ── Sincronização: etapa ADMITIDO ↔ checkbox Admitido ──
+document.getElementById('mc-etapa').addEventListener('change', function() {
+  const cb = document.getElementById('mc-admitido');
+  if(this.value === 'ADMITIDO') cb.checked = true;
+  else if(['CAPTACAO','OPERACAO','DOCUMENTACAO'].includes(this.value)) cb.checked = false;
+  toggleEtapaCR();
+});
+document.getElementById('mc-admitido').addEventListener('change', function() {
+  const etapa = document.getElementById('mc-etapa');
+  if(this.checked && etapa.value !== 'ADMITIDO') etapa.value = 'ADMITIDO';
+  else if(!this.checked && etapa.value === 'ADMITIDO') etapa.value = '';
+  toggleEtapaCR();
+});
 
 async function saveCandidato() {
   const fid = document.getElementById('mc-feirao').value;
@@ -2087,6 +2244,8 @@ async function saveCandidato() {
   const cidade = document.getElementById('mc-cidade').value.trim();
   const endereco = document.getElementById('mc-endereco').value.trim();
   const admitido = document.getElementById('mc-admitido').checked;
+  const etapaProcesso = document.getElementById('mc-etapa').value;
+  const crVisivel = document.getElementById('mc-cr-visible').value.trim();
   let status = document.getElementById('mc-status').value;
   let ant = document.getElementById('mc-ant').value;
   const recont = document.getElementById('mc-recont').value;
@@ -2102,12 +2261,12 @@ async function saveCandidato() {
   const f = DB.feiraos().find(x=>x.id===fid);
   if(!f){toast('Feirão não encontrado','error');return;}
   let cands = DB.candidatos();
-  const dupCPF = cands.find(c=>normStr(c.cpf)===normStr(cpf) && c.id!==editCandId);
+  const dupCPF = cands.find(c=>normCPF(c.cpf)===normCPF(cpf) && c.id!==editCandId);
   if(dupCPF){toast('CPF já cadastrado em outro candidato!','error');return;}
   const existente = editCandId ? cands.find(x=>x.id===editCandId) : null;
   const c = {
     id: editCandId||uid(), feiraoId: fid, feiraoNome: f.nomeFeirao, feiraoLocal: f.localEvento,
-    nome, cpf, telefone:tel, cr, cargo, cidade, endereco, admitido,
+    nome, cpf, telefone:tel, cr: crVisivel || cr, cargo, cidade, endereco, admitido, etapaProcesso,
     statusProcesso:status, antecedentes:ant,
     recontratacao:recont, motivoReprovacao:motivo, observacoes:obs,
     recrutadorId: f.recrutadorId, recrutadorNome: f.recrutadorNome, bancoTalentosFlag: false,
@@ -2131,7 +2290,7 @@ async function saveCandidato() {
 
 function deleteCandidato(id) {
   confirm_('Excluir este candidato?', async () => {
-    await DB.saveCandidatos(DB.candidatos().filter(c=>c.id!==id));
+    await DB.deleteCandidatosByIds([id]);
     toast('Candidato excluído!','success');
     renderCandidatos();
   });
@@ -2148,6 +2307,8 @@ function viewCandidato(id) {
       <div><span class="text-muted text-sm">Telefone</span><p style="margin-top:2px">${esc(c.telefone)||'—'}</p></div>
       <div><span class="text-muted text-sm">Cargo Pretendido</span><p style="margin-top:2px">${esc(c.cargo)||'—'}</p></div>
       <div><span class="text-muted text-sm">Cidade</span><p style="margin-top:2px">${esc(c.cidade||c.feiraoLocal||'—')}</p></div>
+      <div><span class="text-muted text-sm">Etapa do Processo</span><p style="margin-top:2px">${etapaBadge(c.etapaProcesso)}</p></div>
+      <div><span class="text-muted text-sm">CR – Contrato</span><p style="margin-top:2px;font-weight:600">${esc(c.cr)||'—'}</p></div>
       <div><span class="text-muted text-sm">Admitido</span><p style="margin-top:2px">${c.admitido?'<span class=\"badge badge-orange\">✅ Sim</span>':'<span class=\"badge badge-gray\">Não</span>'}</p></div>
       <div><span class="text-muted text-sm">Feirão</span><p style="margin-top:2px">${esc(c.feiraoNome)}</p></div>
       <div><span class="text-muted text-sm">Recrutador</span><p style="margin-top:2px">${esc(c.recrutadorNome)}</p></div>
@@ -2175,10 +2336,15 @@ function _isAprovadoConsolidado(c) {
     && c.recontratacao !== 'REPROVADO';
 }
 
-// ── Verifica se um candidato é "Reprovado":
-//    apenas statusProcesso final igual a REPROVADO
+// ── Verifica se um candidato é "Reprovado consolidado":
+//    statusProcesso final igual a REPROVADO, OU qualquer reprovação em
+//    antecedentes/recontratação — espelha o critério inverso de "Aprovado
+//    consolidado" acima, para que nenhum candidato fique invisível em ambos
+//    os filtros (ex: status=APROVADO mas antecedentes=REPROVADO).
 function _isReprovadoConsolidado(c) {
-  return c.statusProcesso === 'REPROVADO';
+  return c.statusProcesso === 'REPROVADO'
+    || c.antecedentes === 'REPROVADO'
+    || c.recontratacao === 'REPROVADO';
 }
 
 function getFilteredCandidatos() {
@@ -2190,6 +2356,7 @@ function getFilteredCandidatos() {
   const qa     = document.getElementById('f-ant-cand')?.value||'';
   const qrecont= document.getElementById('f-recont-cand')?.value||'';
   const qadm   = document.getElementById('f-admitido-cand')?.value||'';
+  const qetapa  = document.getElementById('f-etapa-cand')?.value||'';
   const qcidade= normStr(document.getElementById('f-cidade-cand')?.value||'');
 
   return cands.filter(c => {
@@ -2210,6 +2377,7 @@ function getFilteredCandidatos() {
       (!qa     || c.antecedentes === qa) &&
       (!qrecont|| c.recontratacao === qrecont) &&
       (!qadm   || (qadm === '1' ? c.admitido : !c.admitido)) &&
+      (!qetapa  || c.etapaProcesso === qetapa) &&
       (!qcidade|| normStr(c.cidade||c.feiraoLocal||'').includes(qcidade))
     );
   });
@@ -2219,7 +2387,7 @@ function renderCandidatos() {
   const list = getFilteredCandidatos();
   document.getElementById('cand-count-label').textContent = `${list.length} candidato(s) encontrado(s)`;
   const tbody = document.getElementById('candidatos-tbody');
-  if(!list.length){tbody.innerHTML=`<tr><td colspan="13" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();return;}
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="14" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();return;}
   tbody.innerHTML = list.map(c => `<tr>
     <td><input type="checkbox" class="cand-chk" data-id="${c.id}" onclick="updateBulkBar()" style="cursor:pointer;width:15px;height:15px"/></td>
     <td><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')">${esc(c.nome)}</strong>${c.bancoTalentosFlag?'<span class="tag-bt" style="margin-left:5px">BT</span>':''}</td>
@@ -2231,6 +2399,7 @@ function renderCandidatos() {
     <td>${statusBadge(c.statusProcesso)}</td>
     <td>${antBadge(c.antecedentes)}</td>
     <td>${reconBadge(c.recontratacao)}</td>
+    <td>${etapaBadge(c.etapaProcesso)}</td>
     <td>${c.admitido?'<span class="badge badge-orange">✅ Sim</span>':'<span class="badge badge-gray">Não</span>'}</td>
     <td>${fmt(c.dataInclusao)||'—'}</td>
     <td>
@@ -2245,7 +2414,7 @@ function renderCandidatos() {
 
 function clearCandFilters() {
   ['f-nome-cand','f-cidade-cand'].forEach(id=>document.getElementById(id).value='');
-  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand'].forEach(id=>document.getElementById(id).value='');
   renderCandidatos();
 }
 
@@ -2275,12 +2444,8 @@ async function bulkDeleteCandidatos() {
   confirm_(`Excluir ${ids.length} candidato(s) selecionado(s)? Essa ação não pode ser desfeita.`, async () => {
     if(btnDel) { btnDel.disabled = true; btnDel.textContent = 'Excluindo…'; }
     try {
-      const idSet = new Set(ids);
-      const cands = DB.candidatos().filter(c => !idSet.has(c.id));
-      window._cache.candidatos = cands;
-      _LS.set('candidatos', cands);
+      await DB.deleteCandidatosByIds(ids);
       renderCandidatos();
-      await DB.saveCandidatos(cands);
       toast(`${ids.length} candidato(s) excluído(s)!`, 'success');
     } catch(e) {
       toast('Erro ao excluir: ' + (e.message||'tente novamente'), 'error');
@@ -2353,7 +2518,7 @@ function renderTalentos() {
     (!q || normStr(c.nome).includes(q)||normStr(c.cpf).includes(q)) &&
     (!fid || c.feiraoId===fid) &&
     (!qr || c.recrutadorId===qr) &&
-    (!qadm || c.admitido)
+    (!qadm || (qadm === '1' ? c.admitido : !c.admitido))
   );
   document.getElementById('bt-count-label').textContent = `${list.length} talento(s) no banco global`;
   const tbody = document.getElementById('talentos-tbody');
@@ -2420,7 +2585,7 @@ function deleteRecrutador(id) {
   const inUse = DB.feiraos().find(f=>f.recrutadorId===id);
   if(inUse){toast('Recrutador em uso em um feirão, não pode ser excluído!','error');return;}
   confirm_('Excluir este recrutador?', async ()=>{
-    await DB.saveRecrutadores(DB.recrutadores().filter(r=>r.id!==id));
+    await DB.deleteRecrutadoresByIds([id]);
     toast('Recrutador excluído!','success');
     renderRecrutadores();
   });
@@ -2649,6 +2814,8 @@ function doGlobalSearch(q) {
 // EXCEL IMPORT
 // ═══════════════════════════════════════
 let importPreviewData = [];
+let _impEditKey = null; // chave estável da linha em edição (não a posição no array)
+let _impRowKeySeq = 0;
 function handleDrop(e) {
   e.preventDefault();
   document.getElementById('drop-zone').classList.remove('dragover');
@@ -2662,16 +2829,26 @@ function processFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const wb = XLSX.read(e.target.result, {type:'binary', cellDates:true});
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      // Atribui uma chave estável (__rowKey) a cada linha logo na leitura.
+      // Diferente do índice no array, essa chave nunca muda — usá-la para
+      // localizar/editar/remover linhas evita que remover uma linha desalinhe
+      // os botões "Ajustar"/"Excluir" das linhas seguintes (ver Bloco 11).
+      // BUG FIX: também guarda __rowNum (o número da linha na planilha original,
+      // já considerando o cabeçalho). Antes, o número exibido ("Linha N") era
+      // recalculado pela posição atual no array — então, ao excluir uma linha
+      // com erro, todas as linhas seguintes "mudavam de número" na tela mesmo
+      // continuando sendo as mesmas linhas da planilha.
+      rows.forEach((r,i) => { r.__rowKey = ++_impRowKeySeq; r.__rowNum = i + 2; });
       importPreviewData = rows;
       renderImportPreview(rows);
     } catch(err) {
       document.getElementById('imp-status').innerHTML = `<span class="badge badge-red">Erro ao ler arquivo: ${err.message}</span>`;
     }
   };
-  reader.readAsBinaryString(file);
+  reader.readAsArrayBuffer(file);
 }
 
 // ── Mapa de campos aceitos pelo sistema → possíveis nomes de coluna na planilha.
@@ -2745,7 +2922,7 @@ function _setImpErrorsVisible(hasErrors) {
 function renderImportPreview(rows) {
   const errors = [];
   const valid = [];
-  const dbCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
+  const dbCPFs = new Set(DB.candidatos().map(c=>normCPF(c.cpf)));
   // CPFs já vistos dentro da própria planilha (detecta duplicatas internas)
   const seenInSheet = new Set();
 
@@ -2754,7 +2931,7 @@ function renderImportPreview(rows) {
     if(!r.__extracted) r.__extracted = extractImportRow(r);
     const dados = r.__extracted;
     const { nome, cpf } = dados;
-    const cpfNorm = normStr(cpf);
+    const cpfNorm = normCPF(cpf);
     const rowErrors = [];
     if(!nome) rowErrors.push('Nome ausente');
     if(!cpf)  rowErrors.push('CPF ausente');
@@ -2762,7 +2939,10 @@ function renderImportPreview(rows) {
     else if(seenInSheet.has(cpfNorm)) rowErrors.push(`CPF duplicado na planilha (${cpf})`);
     if(cpfNorm) seenInSheet.add(cpfNorm);
     if(rowErrors.length) {
-      errors.push({ rowIdx: i, row: i+2, nome: nome||'(sem nome)', cpf: cpf||'(sem CPF)', errors: rowErrors });
+      // BUG FIX: usa o número de linha original da planilha (__rowNum, atribuído
+      // uma única vez no carregamento) em vez de "i+2" — que mudava de candidato
+      // sempre que uma linha anterior era excluída do preview.
+      errors.push({ rowKey: r.__rowKey, row: r.__rowNum, nome: nome||'(sem nome)', cpf: cpf||'(sem CPF)', errors: rowErrors });
     } else {
       valid.push(r);
     }
@@ -2775,7 +2955,7 @@ function renderImportPreview(rows) {
   const preview = document.getElementById('imp-preview');
   if(!rows.length){ preview.innerHTML='<p class="text-muted text-sm">Planilha vazia</p>'; return; }
 
-  const allColNames = Object.keys(rows[0]).filter(c => c !== '__normKeys' && c !== '__extracted');
+  const allColNames = Object.keys(rows[0]).filter(c => c !== '__normKeys' && c !== '__extracted' && c !== '__rowKey' && c !== '__rowNum');
   const recognizedNorm = new Set();
   Object.values(IMPORT_FIELD_MAP).forEach(names => names.forEach(n => recognizedNorm.add(normColName(n))));
   const recognized = allColNames.filter(c => recognizedNorm.has(normColName(c)));
@@ -2789,16 +2969,16 @@ function renderImportPreview(rows) {
     const dados = r.__extracted || extractImportRow(r);
     const cpf = dados.cpf;
     const nome = dados.nome;
-    const hasErr = !nome || !cpf || dbCPFs.has(normStr(cpf));
+    const hasErr = !nome || !cpf || dbCPFs.has(normCPF(cpf));
     const rowErrs = [];
     if(!nome) rowErrs.push('Nome ausente');
     if(!cpf) rowErrs.push('CPF ausente');
-    else if(dbCPFs.has(normStr(cpf))) rowErrs.push('CPF duplicado');
+    else if(dbCPFs.has(normCPF(cpf))) rowErrs.push('CPF duplicado');
     return `<tr style="${hasErr?'background:var(--red-light)':''}">
-      <td>${i+2}</td>
+      <td>${r.__rowNum}</td>
       ${cols.map(c=>`<td>${esc(String(r[c]||''))}</td>`).join('')}
       <td>${hasErr
-        ? `<span class="badge badge-red" style="cursor:pointer" onclick="openImpEditModal(${i})" title="${rowErrs.join('; ')}">⚠ Erro</span>`
+        ? `<span class="badge badge-red" style="cursor:pointer" onclick="openImpEditModal(${r.__rowKey})" title="${rowErrs.join('; ')}">⚠ Erro</span>`
         : '<span class="badge badge-green">OK</span>'
       }</td>
     </tr>`;
@@ -2829,10 +3009,10 @@ function renderImportPreview(rows) {
             <div style="font-size:.8rem;color:#b91c1c;margin-top:2px">${e.errors.map(x=>`⚠ ${x}`).join(' &nbsp;·&nbsp; ')}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn btn-danger btn-sm" onclick="openImpEditModal(${e.rowIdx})" style="white-space:nowrap">
+            <button class="btn btn-danger btn-sm" onclick="openImpEditModal(${e.rowKey})" style="white-space:nowrap">
               ✏ Ajustar
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="removeImpRow(${e.rowIdx})" style="white-space:nowrap;color:var(--red);border-color:#fca5a5" title="Remover este registro da importação">
+            <button class="btn btn-secondary btn-sm" onclick="removeImpRow(${e.rowKey})" style="white-space:nowrap;color:var(--red);border-color:#fca5a5" title="Remover este registro da importação">
               🗑 Excluir
             </button>
           </div>
@@ -2841,28 +3021,32 @@ function renderImportPreview(rows) {
     </div>`;
 }
 
-// ── Abre mini-modal de edição para a linha com erro
-function openImpEditModal(rowIdx) {
-  _impEditIdx = rowIdx;
-  const r = importPreviewData[rowIdx];
+// ── Abre mini-modal de edição para a linha com erro (localizada por __rowKey,
+//    não pela posição no array — a posição muda quando outras linhas são removidas)
+function openImpEditModal(rowKey) {
+  _impEditKey = rowKey;
+  const r = importPreviewData.find(x => x.__rowKey === rowKey);
+  if(!r) { toast('Linha não encontrada (já pode ter sido removida).','error'); return; }
   const dados = r.__extracted || extractImportRow(r);
 
-  const existingCPFs = new Set(
-    DB.candidatos()
-      .filter((_,i) => {
-        // Exclui o próprio CPF se já havia sido ajustado antes (evita falso positivo de dup)
-        return true;
-      })
-      .map(c => normStr(c.cpf))
-  );
+  const existingCPFs = new Set(DB.candidatos().map(c => normCPF(c.cpf)));
+
+  // Detecta também duplicatas internas na planilha (exceto a própria linha sendo editada)
+  importPreviewData.forEach(other => {
+    if(other.__rowKey === _impEditKey) return;
+    const d = other.__extracted || extractImportRow(other);
+    if(d.cpf) existingCPFs.add(normCPF(d.cpf));
+  });
 
   // Descobre os erros atuais para orientar o usuário
   const rowErrors = [];
   if(!dados.nome) rowErrors.push('Nome ausente');
   if(!dados.cpf)  rowErrors.push('CPF ausente');
-  else if(existingCPFs.has(normStr(dados.cpf))) rowErrors.push(`CPF já cadastrado no sistema (${dados.cpf})`);
+  else if(existingCPFs.has(normCPF(dados.cpf))) rowErrors.push(`CPF já cadastrado no sistema (${dados.cpf})`);
 
-  document.getElementById('imp-edit-title').textContent = `Ajustar Linha ${rowIdx+2}`;
+  // BUG FIX: usa __rowNum (número original e estável da linha na planilha)
+  // em vez da posição atual no array, que muda quando outras linhas são excluídas.
+  document.getElementById('imp-edit-title').textContent = `Ajustar Linha ${r.__rowNum}`;
   document.getElementById('imp-edit-errs').innerHTML = rowErrors.map(e=>`<span style="color:#b91c1c;font-size:.8rem">⚠ ${e}</span>`).join('<br>');
   document.getElementById('imp-edit-nome').value  = dados.nome  || '';
   document.getElementById('imp-edit-cpf').value   = dados.cpf   || '';
@@ -2873,10 +3057,11 @@ function openImpEditModal(rowIdx) {
   openModal('modal-imp-edit');
 }
 
-// ── Salva o ajuste de volta em importPreviewData e re-renderiza o preview
+// ── Salva o ajuste de volta em importPreviewData (localizando por __rowKey) e re-renderiza o preview
 function saveImpEdit() {
-  if(_impEditIdx === null) return;
-  const r = importPreviewData[_impEditIdx];
+  if(_impEditKey === null) return;
+  const r = importPreviewData.find(x => x.__rowKey === _impEditKey);
+  if(!r) { toast('Linha não encontrada (já pode ter sido removida).','error'); _impEditKey = null; closeModal('modal-imp-edit'); return; }
 
   // Aplica os valores editados diretamente nos dados extraídos (sobrescreve)
   const dados = r.__extracted || extractImportRow(r);
@@ -2889,13 +3074,19 @@ function saveImpEdit() {
   r.__extracted = dados;
 
   closeModal('modal-imp-edit');
-  _impEditIdx = null;
+  _impEditKey = null;
   renderImportPreview(importPreviewData);
   toast('Registro ajustado! Revise o preview abaixo.', 'success');
 }
 
-function removeImpRow(rowIdx) {
-  importPreviewData.splice(rowIdx, 1);
+// ── Remove uma linha pela chave estável __rowKey, não pela posição no array.
+//    Isso evita que, ao remover uma linha, os botões "Ajustar"/"Excluir" das
+//    linhas seguintes (que ainda apontam para o índice antigo até a re-renderização)
+//    acabem agindo sobre o registro errado (ver Bloco 11 da revisão).
+function removeImpRow(rowKey) {
+  const idx = importPreviewData.findIndex(x => x.__rowKey === rowKey);
+  if(idx === -1) { toast('Linha não encontrada (já pode ter sido removida).','error'); return; }
+  importPreviewData.splice(idx, 1);
   if(!importPreviewData.length) {
     document.getElementById('imp-preview').innerHTML = '<p class="text-muted text-sm text-center" style="padding:30px 0">Nenhum registro na fila.</p>';
     document.getElementById('imp-status').innerHTML = '';
@@ -2912,20 +3103,20 @@ async function confirmImport() {
   if(!fid){toast('Selecione um feirão de destino','error');return;}
   const f = DB.feiraos().find(x=>x.id===fid);
   if(!f){toast('Feirão não encontrado','error');return;}
-  const existingCPFs = new Set(DB.candidatos().map(c=>normStr(c.cpf)));
+  const existingCPFs = new Set(DB.candidatos().map(c=>normCPF(c.cpf)));
   let cands = DB.candidatos();
   let added = 0;
   const skipped = [];
-  importPreviewData.forEach((r, i) => {
+  importPreviewData.forEach((r) => {
     // Usa dados pré-extraídos (possivelmente ajustados pelo usuário)
     const dados = r.__extracted || extractImportRow(r);
     const { nome, cpf } = dados;
-    if(!nome || !cpf || existingCPFs.has(normStr(cpf))) {
+    if(!nome || !cpf || existingCPFs.has(normCPF(cpf))) {
       const errs = [];
       if(!nome) errs.push('Nome ausente');
       if(!cpf)  errs.push('CPF ausente');
-      else if(existingCPFs.has(normStr(cpf))) errs.push('CPF duplicado');
-      skipped.push({ row: i+2, nome: nome||'(sem nome)', errs });
+      else if(existingCPFs.has(normCPF(cpf))) errs.push('CPF duplicado');
+      skipped.push({ row: r.__rowNum, nome: nome||'(sem nome)', errs });
       return;
     }
     const c = {
@@ -2935,7 +3126,7 @@ async function confirmImport() {
     };
     applyRuleEngine(c);
     cands.push(c);
-    existingCPFs.add(normStr(cpf));
+    existingCPFs.add(normCPF(cpf));
     added++;
   });
   await DB.saveCandidatos(cands);
@@ -3129,25 +3320,61 @@ function calNavigate(dir) {
   renderCalendar();
 }
 
-// Get all events for a given date string YYYY-MM-DD
-function getEventsForDate(dateStr) {
-  const eventos = getAllExpandedEvents();
+// Get all events for a given date string YYYY-MM-DD.
+// Aceita opcionalmente uma lista de eventos já expandidos (expandedEvents) —
+// usado pela visualização mensal, que expande uma vez para o mês todo e
+// reaproveita o resultado em cada dia, em vez de recalcular 35-42 vezes.
+// BUG FIX: quando expandedEvents não é informado, expande especificamente
+// para a própria dateStr (em vez do padrão "8 semanas a partir da data
+// original do evento"). Sem isso, um evento recorrente exibido corretamente
+// na grade do mês (que usa expansão por intervalo) podia "desaparecer" no
+// modal do dia (que chamava esta função sem argumento extra), pois a
+// expansão padrão não cobre datas distantes da criação original do evento.
+function getEventsForDate(dateStr, expandedEvents=null) {
+  const eventos = expandedEvents || getAllExpandedEvents(dateStr, dateStr);
   return eventos.filter(e => e.dataIni <= dateStr && (e.dataFim || e.dataIni) >= dateStr);
 }
 
-// Expand recurring events for current month display
-function getAllExpandedEvents() {
+// Expand recurring events. Por padrão (sem argumentos), expande 8 semanas a
+// partir de hoje — comportamento original, adequado para listas de "próximos
+// eventos" (agenda e upcoming), que só olham para a frente a partir de hoje.
+// Quando rangeStart/rangeEnd são informados, a expansão passa a cobrir esse
+// intervalo (ex: o mês sendo visualizado no calendário), tanto para trás
+// quanto para frente — sem isso, eventos recorrentes "desapareciam" do
+// calendário ao navegar para meses distantes de hoje (ver Bloco 13 da revisão).
+function getAllExpandedEvents(rangeStart=null, rangeEnd=null) {
   const eventos = DB.eventos();
   const expanded = [];
   eventos.forEach(e => {
     expanded.push(e);
     if(e.recorrente) {
-      // Add weekly repeats for 8 weeks forward
-      for(let w = 1; w <= 8; w++) {
-        const d = new Date(e.dataIni + 'T12:00:00');
-        d.setDate(d.getDate() + w*7);
-        const newDate = d.toISOString().slice(0,10);
-        expanded.push({...e, id: e.id+'_rec_'+w, dataIni: newDate, dataFim: newDate, _recurring: true, _parentId: e.id});
+      const baseDate = new Date(e.dataIni + 'T12:00:00');
+      if (rangeStart && rangeEnd) {
+        // Gera todas as repetições semanais cujo dataIni cai dentro de
+        // [rangeStart, rangeEnd], podendo incluir repetições anteriores a hoje
+        // (necessário ao navegar para meses passados) e sem limite de 8 semanas.
+        const start = new Date(rangeStart + 'T12:00:00');
+        const end = new Date(rangeEnd + 'T12:00:00');
+        // Acha a primeira repetição (w pode ser negativo) que cai dentro do range
+        const diffDays = Math.round((start - baseDate) / 86400000);
+        let wStart = Math.floor(diffDays / 7) - 1; // 1 semana de margem de segurança
+        for (let w = wStart; w <= wStart + 60; w++) {
+          if (w === 0) continue; // a própria ocorrência original já foi adicionada acima
+          const d = new Date(baseDate);
+          d.setDate(d.getDate() + w*7);
+          if (d < start) continue;
+          if (d > end) break;
+          const newDate = d.toISOString().slice(0,10);
+          expanded.push({...e, id: e.id+'_rec_'+w, dataIni: newDate, dataFim: newDate, _recurring: true, _parentId: e.id});
+        }
+      } else {
+        // Comportamento original: 8 semanas para frente a partir da data do evento.
+        for(let w = 1; w <= 8; w++) {
+          const d = new Date(baseDate);
+          d.setDate(d.getDate() + w*7);
+          const newDate = d.toISOString().slice(0,10);
+          expanded.push({...e, id: e.id+'_rec_'+w, dataIni: newDate, dataFim: newDate, _recurring: true, _parentId: e.id});
+        }
       }
     }
   });
@@ -3195,13 +3422,27 @@ function renderCalMonthView() {
     cells.push({ day: next++, month: calMonth+1, year: calYear, other: true });
   }
 
+  // Calcula o intervalo de datas efetivamente exibido na grade (incluindo
+  // padding de dias do mês anterior/seguinte) e expande os eventos
+  // recorrentes UMA VEZ para esse intervalo — corrige o bug em que eventos
+  // recorrentes desapareciam ao navegar para meses distantes de hoje, e
+  // também evita recalcular a expansão a cada célula do calendário.
+  const pad2 = n => String(n).padStart(2,'0');
+  const firstCell = cells[0], lastCell = cells[cells.length-1];
+  const normMonth = (m,y) => m < 0 ? [11, y-1] : m > 11 ? [0, y+1] : [m, y];
+  const [fm, fy] = normMonth(firstCell.month, firstCell.year);
+  const [lm, ly] = normMonth(lastCell.month, lastCell.year);
+  const rangeStart = `${fy}-${pad2(fm+1)}-${pad2(firstCell.day)}`;
+  const rangeEnd   = `${ly}-${pad2(lm+1)}-${pad2(lastCell.day)}`;
+  const expandedEvents = getAllExpandedEvents(rangeStart, rangeEnd);
+
   grid.innerHTML = cells.map(cell => {
     let m = cell.month, y = cell.year;
     if(m < 0) { m = 11; y--; }
     if(m > 11) { m = 0; y++; }
     const pad = n => String(n).padStart(2,'0');
     const dateStr = `${y}-${pad(m+1)}-${pad(cell.day)}`;
-    const evs = getEventsForDate(dateStr);
+    const evs = getEventsForDate(dateStr, expandedEvents);
     const isToday = dateStr === todayStr;
     const hasEvs = evs.length > 0;
 
@@ -3417,7 +3658,11 @@ function openEventModal(id=null, prefillDate=null) {
 }
 
 function editEvent(id) {
-  openEventModal(id);
+  // IDs de eventos recorrentes expandidos têm sufixo _rec_N — resolve para o pai
+  const realId = id.includes('_rec_') ? id.split('_rec_')[0] : id;
+  const exists = DB.eventos().find(x => x.id === realId);
+  if (!exists) { toast('Evento não encontrado.', 'error'); return; }
+  openEventModal(realId);
 }
 
 async function saveEvent() {
@@ -3493,7 +3738,7 @@ async function saveEvent() {
 function deleteCurrentEvent() {
   if(!editEventId) return;
   confirm_('Excluir este evento?', async () => {
-    await DB.saveEventos(DB.eventos().filter(e=>e.id!==editEventId));
+    await DB.deleteEventosByIds([editEventId]);
     closeModal('modal-event');
     toast('Evento excluído!','success');
     renderCalendar();
@@ -3550,8 +3795,9 @@ function normColName(s) {
 function getCol(row, ...names) {
   if(!row) return '';
   if(!row.__normKeys) {
-    row.__normKeys = {};
-    Object.keys(row).forEach(k => { row.__normKeys[normColName(k)] = k; });
+    const _nk = {};
+    Object.keys(row).forEach(k => { _nk[normColName(k)] = k; });
+    Object.defineProperty(row, '__normKeys', { value: _nk, enumerable: false, configurable: true });
   }
   for(const name of names) {
     const realKey = row.__normKeys[normColName(name)];
@@ -3623,9 +3869,9 @@ async function initApp() {
       <style>@keyframes _spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
     `;
     document.body.appendChild(loader);
-    // Timeout de 15s — redes mais lentas têm tempo suficiente para conectar
+    // Timeout de 8s — tempo suficiente para conectar sem prender o usuário por muito tempo
     let timedOut = false;
-    const timeout = new Promise(r => setTimeout(() => { timedOut = true; r(); }, 15000));
+    const timeout = new Promise(r => setTimeout(() => { timedOut = true; r(); }, 8000));
     try {
       await Promise.race([window._initSupabase(), timeout]);
     } catch(e) {
