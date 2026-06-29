@@ -154,6 +154,13 @@ if (!window._useLocalFallback) {
       if (anyFailed) {
         window._showSetupWarning();
       }
+      // ── ATUALIZA A TELA com os dados completos do Supabase (pode ter 30k+ registros,
+      // muito mais do que o cache local do localStorage). Sem isso, a tela ficava
+      // presa nos dados antigos/parciais do cache local.
+      if (window._appReady) {
+        window.refreshPage(window.currentPage);
+        if (window.currentPage === 'dashboard') window.renderDashboard();
+      }
     };
 
     // ── PAUSA / RETOMA O REALTIME de uma tabela específica durante importações.
@@ -943,7 +950,10 @@ thead th {
         <select id="an-rec" onchange="renderDashboard()">
           <option value="">Todos os Recrutadores</option>
         </select>
-        <div style="display:inline-flex;align-items:center;border:1px solid var(--gray-200);border-radius:8px;background:var(--white);overflow:hidden">
+        <div style="display:inline-flex;align-items:center;border:1px solid var(--gray-200);border-radius:8px;background:var(--white);overflow:hidden" title="Filtrar por dia / mês / ano de inclusão">
+          <select id="an-dia" onchange="renderDashboard()" title="Dia"
+            style="font-size:.82rem;padding:6px 4px;border:none;outline:none;color:var(--gray-700);font-family:inherit;background:transparent;cursor:pointer"></select>
+          <span style="color:var(--gray-300);font-size:.85rem;user-select:none">/</span>
           <select id="an-mes" onchange="renderDashboard()" title="Mês"
             style="font-size:.82rem;padding:6px 6px;border:none;outline:none;color:var(--gray-700);font-family:inherit;background:transparent;cursor:pointer"></select>
           <span style="color:var(--gray-300);font-size:.85rem;user-select:none">/</span>
@@ -2058,6 +2068,20 @@ const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julh
 function populateMesAnoSelects() {
   const mesIds = ['an-mes','rel-mes'];
   const anoIds = ['an-ano','rel-ano'];
+  // Popula seletor de dia (01-31)
+  const diaIds = ['an-dia'];
+  diaIds.forEach(id => {
+    const sel = document.getElementById(id);
+    if(!sel || sel.options.length) return;
+    const optTodos = document.createElement('option');
+    optTodos.value = ''; optTodos.textContent = 'Dia';
+    sel.appendChild(optTodos);
+    for(let d=1;d<=31;d++){
+      const o = document.createElement('option');
+      o.value = String(d).padStart(2,'0'); o.textContent = String(d).padStart(2,'0');
+      sel.appendChild(o);
+    }
+  });
   const anoAtual = new Date().getFullYear();
   // Intervalo de anos: 5 anos para trás até 1 ano para frente do ano atual
   const anos = [];
@@ -3104,14 +3128,24 @@ function renderDashboard() {
   const mesRaw = document.getElementById('an-mes')?.value||'';
   const mes = mesRaw ? mesRaw.padStart(2,'0') : '';
   const ano = document.getElementById('an-ano')?.value||'';
+  const diaRaw = document.getElementById('an-dia')?.value||'';
+  const dia = diaRaw ? diaRaw.padStart(2,'0') : '';
+  // Monta mapa de feiraoId → dataEvento para lookup eficiente
+  // Mapa feiraoId → dataEvento para filtrar candidatos pela data do feirão
+  const feiraoDataMap = {};
+  feiraos.forEach(f => { if(f.dataEvento) feiraoDataMap[f.id] = f.dataEvento; });
+
   cands = cands.filter(c=>{
     if(fid && c.feiraoId!==fid) return false;
     if(qr  && c.recrutadorId!==qr) return false;
-    if(mes || ano){
-      const d = String(c.dataEvento||c.dataCadastro||c.dataCriacao||'');
+    if(dia || mes || ano){
+      // Usa sempre a dataEvento do feirão vinculado ao candidato (igual ao calendário)
+      const d = String(feiraoDataMap[c.feiraoId] || '');
       if(!d) return false;
+      // d no formato AAAA-MM-DD
       if(ano && d.slice(0,4)!==ano) return false;
       if(mes && d.slice(5,7)!==mes) return false;
+      if(dia && d.slice(8,10)!==dia) return false;
     }
     return true;
   });
@@ -3252,6 +3286,7 @@ function renderDashboard() {
 function clearDashFilters() {
   document.getElementById('an-feirao').value='';
   document.getElementById('an-rec').value='';
+  document.getElementById('an-dia').value='';
   document.getElementById('an-mes').value='';
   document.getElementById('an-ano').value='';
   renderDashboard();
