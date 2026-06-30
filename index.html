@@ -1108,9 +1108,17 @@ thead th {
           <option value="DOCUMENTACAO">📄 Documentação</option>
           <option value="ADMITIDO">✅ Admitido</option>
         </select>
-        <input id="f-cidade-cand" type="text" placeholder="Cidade / Local…" oninput="debouncedRenderCandidatos()" style="min-width:150px"/>
+        <div style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--gray-300);border-radius:8px;overflow:hidden;background:var(--gray-100)">
+          <input id="f-nome-cand" type="text" placeholder="Nome, CPF, Cidade ou Cargo…"
+            onkeydown="if(event.key==='Enter')renderCandidatos(true)"
+            style="min-width:220px;border:none;background:transparent;padding:7px 12px;font-size:.83rem;outline:none;color:var(--gray-900)"/>
+          <button onclick="renderCandidatos(true)" title="Pesquisar"
+            style="background:var(--blue-600);border:none;cursor:pointer;padding:0 12px;height:34px;display:flex;align-items:center;color:#fff;transition:background .15s"
+            onmouseover="this.style.background='var(--blue-700)'" onmouseout="this.style.background='var(--blue-600)'">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </button>
+        </div>
         <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
-        <input type="hidden" id="f-nome-cand" value=""/>
         <input type="hidden" id="f-ant-cand" value=""/>
         <input type="hidden" id="f-recont-cand" value=""/>
         <input type="hidden" id="f-admitido-cand" value=""/>
@@ -1830,6 +1838,21 @@ const DB = {
     window._cache.candidatos = remaining;
     if (!window._useLocalFallback && window._sbDeleteByIds) await window._sbDeleteByIds('candidatos', ids);
   },
+  // ── Upsert de UM candidato: atualiza cache local e envia só esse registro ao Supabase.
+  // Muito mais eficiente que saveCandidatos() com 30k+ registros.
+  upsertCandidato: async (c) => {
+    const cands = window._cache.candidatos || [];
+    const idx = cands.findIndex(x => x.id === c.id);
+    if (idx !== -1) cands[idx] = c; else cands.push(c);
+    window._cache.candidatos = cands;
+    // Não tenta salvar no localStorage (muito grande); Supabase é a fonte de verdade
+    if (!window._useLocalFallback && window._sbUpsertOnly) {
+      await window._sbUpsertOnly('candidatos', [c]);
+    } else {
+      _LS.set('candidatos', cands);
+    }
+  },
+
   deleteRecrutadoresByIds: async (ids) => {
     const remaining = DB.recrutadores().filter(x => !ids.includes(x.id));
     _LS.set('recrutadores', remaining);
@@ -2302,16 +2325,27 @@ async function saveFeirao() {
     const old = all[idx];
     all[idx] = {...old, nomeFeirao:nome, dataEvento:data, localEvento:local, enderecoCompleto, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs};
     const recrutadorMudou = old.recrutadorId !== recId || old.recrutadorNome !== recNome;
-    let cands = DB.candidatos().map(c => {
+    const todosCandsAtual = DB.candidatos();
+    const candsAtualizados = [];
+    const cands = todosCandsAtual.map(c => {
       if(c.feiraoId !== editFeiraId) return c;
-      return {
+      const updated = {
         ...c,
         feiraoNome: nome,
         feiraoLocal: local,
         ...(recrutadorMudou ? { recrutadorId: recId, recrutadorNome: recNome } : {})
       };
+      candsAtualizados.push(updated);
+      return updated;
     });
-    await DB.saveCandidatos(cands);
+    // Atualiza cache local com todos
+    window._cache.candidatos = cands;
+    // Envia ao Supabase apenas os candidatos deste feirão que foram alterados
+    if (!window._useLocalFallback && window._sbUpsertOnly && candsAtualizados.length) {
+      await window._sbUpsertOnly('candidatos', candsAtualizados);
+    } else if (window._useLocalFallback) {
+      _LS.set('candidatos', cands);
+    }
     // SYNC: Atualiza evento do calendário vinculado a este feirão
     if(data) {
       let eventos = DB.eventos();
@@ -2652,13 +2686,8 @@ async function saveCandidato() {
     dataInclusao: existente?.dataInclusao || today(),
   };
   applyRuleEngine(c);
-  if(editCandId) {
-    const idx = cands.findIndex(x=>x.id===editCandId);
-    cands[idx] = c;
-  } else {
-    cands.push(c);
-  }
-  await DB.saveCandidatos(cands);
+  // ── Upsert individual: atualiza só este registro no Supabase (não reenvia os 30k+)
+  await DB.upsertCandidato(c);
   closeModal('modal-cand');
   toast(editCandId?'Candidato atualizado!':'Candidato salvo!','success');
   if(ant==='REPROVADO' || recont==='REPROVADO') {
@@ -2736,7 +2765,7 @@ function getFilteredCandidatos() {
   const qrecont= document.getElementById('f-recont-cand')?.value||'';
   const qadm   = document.getElementById('f-admitido-cand')?.value||'';
   const qetapa  = document.getElementById('f-etapa-cand')?.value||'';
-  const qcidade= normStr(document.getElementById('f-cidade-cand')?.value||'');
+  // f-cidade-cand removido — busca unificada em f-nome-cand
 
   return cands.filter(c => {
     // Filtro de status: comparação exata com statusProcesso
@@ -2744,14 +2773,14 @@ function getFilteredCandidatos() {
 
     return (
       (!fid    || c.feiraoId === fid) &&
-      (!q      || normStr(c.nome).includes(q) || normStr(c.cpf).includes(q) || normStr(c.cr||'').includes(q) || normStr(c.cargo||'').includes(q)) &&
+      (!q      || normStr(c.nome).includes(q) || normStr(c.cidade||c.feiraoLocal||'').includes(q) || normStr(c.cargo||'').includes(q) || (/[0-9]/.test(q) && (c.cpf||'').replace(/[^0-9]/g,'').includes(q.replace(/[^0-9]/g,'')))) &&
       (!qr     || c.recrutadorId === qr) &&
       statusOk &&
       (!qa     || c.antecedentes === qa) &&
       (!qrecont|| c.recontratacao === qrecont) &&
       (!qadm   || (qadm === '1' ? c.admitido : !c.admitido)) &&
       (!qetapa  || c.etapaProcesso === qetapa) &&
-      (!qcidade|| normStr(c.cidade||c.feiraoLocal||'').includes(qcidade))
+      (true) // cidade incluída no campo unificado acima
     );
   });
 }
@@ -2841,7 +2870,7 @@ function candGoPage(p) {
 }
 
 function clearCandFilters() {
-  ['f-nome-cand','f-cidade-cand'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-nome-cand').value='';
   ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand'].forEach(id=>document.getElementById(id).value='');
   renderCandidatos(true);
 }
@@ -3035,9 +3064,20 @@ async function saveRecrutador() {
     let feiraos = DB.feiraos();
     feiraos = feiraos.map(f=>f.recrutadorId===editRecId?{...f,recrutadorNome:nome}:f);
     await DB.saveFeiraos(feiraos);
-    let cands = DB.candidatos();
-    cands = cands.map(c=>c.recrutadorId===editRecId?{...c,recrutadorNome:nome}:c);
-    await DB.saveCandidatos(cands);
+    const todosCandsRec = DB.candidatos();
+    const candsRecAtual = [];
+    const candsRec = todosCandsRec.map(c => {
+      if(c.recrutadorId !== editRecId) return c;
+      const updated = {...c, recrutadorNome: nome};
+      candsRecAtual.push(updated);
+      return updated;
+    });
+    window._cache.candidatos = candsRec;
+    if (!window._useLocalFallback && window._sbUpsertOnly && candsRecAtual.length) {
+      await window._sbUpsertOnly('candidatos', candsRecAtual);
+    } else if (window._useLocalFallback) {
+      _LS.set('candidatos', candsRec);
+    }
     toast('Recrutador atualizado!','success');
   } else {
     all.push({id:uid(), nome});
