@@ -38,6 +38,81 @@ window._cache = { feiraos: [], candidatos: [], recrutadores: [], eventos: [] };
 window._cacheReady = { feiraos: false, candidatos: false, recrutadores: false, eventos: false };
 window._useLocalFallback = (SUPABASE_URL === 'COLE_SUA_PROJECT_URL_AQUI');
 
+// ══════════════════════════════════════════════════════════════
+// SISTEMA DE BLOQUEIO GLOBAL DE RENDER
+// Qualquer operacao (salvar, excluir, importar, editar em massa)
+// chama _opStart() antes e _opEnd() depois.
+// Enquanto ha operacoes ativas, os renders ficam na fila e sao
+// executados UMA UNICA VEZ quando tudo terminar.
+// ══════════════════════════════════════════════════════════════
+window._opCount    = 0;   // contador de operacoes ativas
+window._renderQueue = {}; // { page: true } renders pendentes
+
+window._opStart = function(msg) {
+  window._opCount++;
+  // Mostra overlay "Atualizando, aguarde..." se ainda nao existe
+  if (!document.getElementById('_op-overlay')) {
+    const ov = document.createElement('div');
+    ov.id = '_op-overlay';
+    ov.style.cssText = [
+      'position:fixed;inset:0;z-index:9998',
+      'background:rgba(10,22,40,.55)',
+      'display:flex;align-items:center;justify-content:center',
+      'backdrop-filter:blur(2px)',
+      'transition:opacity .2s ease',
+    ].join(';');
+    ov.innerHTML = '<div style="background:#0d2142;color:#fff;border-radius:16px;padding:22px 32px;' +
+      'box-shadow:0 8px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;gap:14px;min-width:240px">' +
+      '<svg id="_op-spinner" width="36" height="36" fill="none" stroke="#60a5fa" stroke-width="2" viewBox="0 0 24 24"' +
+      ' style="animation:_opSpin 1s linear infinite">' +
+      '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>' +
+      '</svg>' +
+      '<div id="_op-msg" style="font-size:.92rem;font-weight:700;letter-spacing:.01em">' +
+        (msg || 'Atualizando, aguarde…') +
+      '</div>' +
+      '<div style="font-size:.75rem;color:#93c5fd">A tela será atualizada ao finalizar</div>' +
+      '<style>@keyframes _opSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>' +
+      '</div>';
+    document.body.appendChild(ov);
+  } else {
+    // Atualiza mensagem se ja existe
+    const msgEl = document.getElementById('_op-msg');
+    if (msgEl && msg) msgEl.textContent = msg;
+  }
+};
+
+window._opEnd = function() {
+  if (window._opCount > 0) window._opCount--;
+  if (window._opCount > 0) return; // ainda ha operacoes em curso
+
+  // Remove overlay com fade
+  const ov = document.getElementById('_op-overlay');
+  if (ov) {
+    ov.style.opacity = '0';
+    setTimeout(function() { if (ov.parentNode) ov.remove(); }, 220);
+  }
+
+  // Executa todos os renders pendentes de uma vez
+  const queue = window._renderQueue;
+  window._renderQueue = {};
+  // Pequeno delay para o fade terminar antes de renderizar
+  setTimeout(function() {
+    if (queue.dashboard && window.renderDashboard) window.renderDashboard();
+    if (queue.feiraos   && window.renderFeiraos)   window.renderFeiraos();
+    if (queue.candidatos && window.renderCandidatos) window.renderCandidatos();
+    if (queue.recrutadores && window.renderRecrutadores) window.renderRecrutadores();
+  }, 50);
+};
+
+// Versao segura de cada render -- se ha operacao ativa, enfileira em vez de executar
+window._safeRender = function(page) {
+  if (window._opCount > 0 || window._loadingBlocked) {
+    window._renderQueue[page] = true;
+    return true; // bloqueado, enfileirado
+  }
+  return false; // livre, pode renderizar
+};
+
 const _LS = {
   get: k => { try { return JSON.parse(localStorage.getItem('gps_'+k)||'null'); } catch(e) { return null; } },
   set: (k,v) => {
@@ -59,54 +134,150 @@ if (!window._useLocalFallback) {
     _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     async function _loadTable(table) {
-      // Supabase retorna no máximo 1000 linhas por query por padrão.
-      // Fazemos paginação com range até não sobrar mais linhas.
+      // ── CARREGAMENTO PARALELO com notificacao de progresso ao loader.
+      // Enquanto window._loadingBlocked estiver ativo, os refreshPage()
+      // intermediarios sao suprimidos -- a tela so e renderizada uma unica
+      // vez, com todos os dados prontos, eliminando o "piscar" de dados mudando.
       const PAGE = 1000;
-      let allRows = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await _sb.from(table).select('data').range(from, from + PAGE - 1);
-        if (error) {
-          const msg = error.message || error.details || error.hint || JSON.stringify(error);
-          throw new Error(`Tabela "${table}": ${msg}`);
-        }
-        const chunk = (data || []).map(r => r.data);
-        allRows = allRows.concat(chunk);
-        if (chunk.length < PAGE) break; // última página
-        from += PAGE;
+
+      // Notifica o loader: inicio desta tabela (5% para dar feedback imediato)
+      if (window._loaderSetTableProgress) window._loaderSetTableProgress(table, 5);
+
+      // 1a pagina + contagem total em paralelo
+      const [firstRes, countRes] = await Promise.all([
+        _sb.from(table).select('data').range(0, PAGE - 1),
+        _sb.from(table).select('id', { count: 'exact', head: true }),
+      ]);
+
+      if (firstRes.error) {
+        const msg = firstRes.error.message || firstRes.error.details || JSON.stringify(firstRes.error);
+        if (window._loaderSetTableProgress) window._loaderSetTableProgress(table, 100);
+        throw new Error('Tabela "' + table + '": ' + msg);
       }
-      window._cache[table] = allRows;
-      _LS.set(table, allRows);
+
+      const firstChunk = (firstRes.data || []).map(r => r.data);
+      const total = countRes.count || firstChunk.length;
+      const totalPages = Math.max(1, Math.ceil(total / PAGE));
+
+      window._cache[table] = [...firstChunk];
       window._cacheReady[table] = true;
+
+      // Progresso apos 1a pagina
+      if (window._loaderSetTableProgress) {
+        window._loaderSetTableProgress(table, Math.round((1 / totalPages) * 90));
+      }
+
+      // Se nao ha loader bloqueando, renderiza com a 1a pagina imediatamente
+      if (!window._loadingBlocked && window._appReady && firstChunk.length > 0) {
+        window.refreshPage(window.currentPage);
+        if (window.currentPage === 'dashboard') window.renderDashboard();
+      }
+
+      // Se so havia uma pagina, finaliza
+      if (firstChunk.length < PAGE || total <= PAGE) {
+        _LS.set(table, firstChunk);
+        if (window._loaderMarkTableDone) window._loaderMarkTableDone(table);
+        // Render final se nao havia loader
+        if (!window._loadingBlocked && window._appReady) {
+          window.refreshPage(window.currentPage);
+          if (window.currentPage === 'dashboard') window.renderDashboard();
+        }
+        return;
+      }
+
+      // Dispara todas as paginas restantes em paralelo, com progresso incremental
+      const requests = [];
+      for (let page = 1; page < totalPages; page++) {
+        const from = page * PAGE;
+        requests.push(
+          _sb.from(table).select('data').range(from, from + PAGE - 1)
+            .then(res => (res.data || []).map(r => r.data))
+            .catch(() => [])
+        );
+      }
+
+      // Acompanha progresso conforme as paginas chegam
+      let pagesLoaded = 1;
+      const chunksWithProgress = requests.map(req =>
+        req.then(chunk => {
+          pagesLoaded++;
+          if (window._loaderSetTableProgress) {
+            window._loaderSetTableProgress(table, Math.round((pagesLoaded / totalPages) * 90));
+          }
+          return chunk;
+        })
+      );
+
+      const chunks = await Promise.all(chunksWithProgress);
+      const allRows = firstChunk.concat(...chunks);
+      window._cache[table] = allRows;
+      window._cacheReady[table] = true;
+      _LS.set(table, allRows);
+
+      // Marca tabela como 100% no loader
+      if (window._loaderMarkTableDone) {
+        window._loaderMarkTableDone(table);
+      }
+
+      // So renderiza se o loader nao estiver bloqueando (pos-inicializacao normal)
+      if (!window._loadingBlocked && window._appReady) {
+        window.refreshPage(window.currentPage);
+        if (window.currentPage === 'dashboard') window.renderDashboard();
+      }
     }
 
     async function _loadTableAllPages(table) {
+      // Versão paralela para uso no realtime (mesma lógica do _loadTable)
       const PAGE = 1000;
-      let allRows = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await _sb.from(table).select('data').range(from, from + PAGE - 1);
-        if (error || !data) break;
-        const chunk = data.map(r => r.data);
-        allRows = allRows.concat(chunk);
-        if (chunk.length < PAGE) break;
-        from += PAGE;
+      const [firstRes, countRes] = await Promise.all([
+        _sb.from(table).select('data').range(0, PAGE - 1),
+        _sb.from(table).select('id', { count: 'exact', head: true }),
+      ]);
+      if (firstRes.error || !firstRes.data) return [];
+      const firstChunk = firstRes.data.map(r => r.data);
+      const total = countRes.count || firstChunk.length;
+      if (firstChunk.length < PAGE || total <= PAGE) return firstChunk;
+      const totalPages = Math.ceil(total / PAGE);
+      const requests = [];
+      for (let page = 1; page < totalPages; page++) {
+        const from = page * PAGE;
+        requests.push(
+          _sb.from(table).select('data').range(from, from + PAGE - 1)
+            .then(res => (res.data || []).map(r => r.data))
+            .catch(() => [])
+        );
       }
-      return allRows;
+      const chunks = await Promise.all(requests);
+      return firstChunk.concat(...chunks);
     }
 
+    // Guarda referência dos canais ativos por tabela para evitar duplicatas
+    window._realtimeChannels = window._realtimeChannels || {};
+    // Flag por tabela: true = operação em andamento, ignorar eventos do realtime
+    window._realtimePaused  = window._realtimePaused  || {};
+
     function _setupRealtime(table) {
-      _sb.channel('rt_' + table)
+      // Remove canal anterior desta tabela antes de criar um novo
+      if (window._realtimeChannels[table]) {
+        try { _sb.removeChannel(window._realtimeChannels[table]); } catch(e) {}
+        delete window._realtimeChannels[table];
+      }
+      const ch = _sb.channel('rt_' + table)
         .on('postgres_changes', { event: '*', schema: 'public', table }, async () => {
+          // Se uma operação local está em andamento, ignora o evento
+          // (o próprio upsert/delete vai atualizar o cache quando terminar)
+          if (window._realtimePaused[table]) return;
+          if (window._loadingBlocked) return; // loader ainda ativo, ignora
           const rows = await _loadTableAllPages(table);
           window._cache[table] = rows;
           _LS.set(table, rows);
-          if (window._appReady) {
+          if (window._appReady && !window._loadingBlocked) {
             window.refreshPage(window.currentPage);
             if (window.currentPage === 'dashboard') window.renderDashboard();
           }
         })
         .subscribe();
+      window._realtimeChannels[table] = ch;
     }
 
     window._initSupabase = async () => {
@@ -125,7 +296,8 @@ if (!window._useLocalFallback) {
       });
 
       // Notifica o app para renderizar com o cache local enquanto sincroniza
-      if (Object.values(window._cacheReady).some(Boolean) && window._appReady) {
+      // Mas so se o loader nao estiver bloqueando (evita piscar durante carregamento inicial)
+      if (Object.values(window._cacheReady).some(Boolean) && window._appReady && !window._loadingBlocked) {
         window.refreshPage(window.currentPage);
       }
 
@@ -145,36 +317,34 @@ if (!window._useLocalFallback) {
         }
       }));
 
-      // Só configura realtime para tabelas que carregaram com sucesso
-      tables.forEach(t => {
-        if (window._cacheReady[t]) {
-          try { _setupRealtime(t); } catch(e) { console.warn('Realtime setup failed for', t, e); }
-        }
-      });
-      if (anyFailed) {
-        window._showSetupWarning();
-      }
-      // ── ATUALIZA A TELA com os dados completos do Supabase (pode ter 30k+ registros,
-      // muito mais do que o cache local do localStorage). Sem isso, a tela ficava
-      // presa nos dados antigos/parciais do cache local.
-      if (window._appReady) {
-        window.refreshPage(window.currentPage);
-        if (window.currentPage === 'dashboard') window.renderDashboard();
-      }
+      // Realtime sera configurado depois que o loader fechar
+      // para evitar eventos chegando enquanto a tela ainda nao foi renderizada
+      window._pendingRealtimeTables = tables.filter(t => window._cacheReady[t]);
+      window._initHadFailure = anyFailed;
     };
 
     // ── PAUSA / RETOMA O REALTIME de uma tabela específica durante importações.
     // Evita que cada chunk de upsert dispare uma releitura completa da tabela,
     // o que causava lentidão perceptível em importações grandes (500+ candidatos).
     window._pauseRealtime = (table) => {
-      try {
-        const ch = _sb.channel('rt_' + table);
-        if (ch) _sb.removeChannel(ch);
-      } catch(e) { /* ignora se canal não existia */ }
+      // Seta a flag — o listener vai ignorar eventos enquanto a flag estiver ativa
+      window._realtimePaused[table] = true;
     };
 
     window._resumeRealtime = (table) => {
-      try { _setupRealtime(table); } catch(e) { console.warn('Realtime resume failed for', table, e); }
+      // ── GRACE PERIOD antes de retomar o realtime.
+      // O próprio Supabase demora um pouco para "ecoar" via websocket a
+      // mudança que ACABAMOS de enviar. Se despausarmos na hora, esse eco
+      // chega, dispara uma releitura completa da tabela e provoca o
+      // "pisca/refresh" das informações na tela mesmo a operação já tendo
+      // terminado. Esperando um pouco, o eco chega ENQUANTO ainda está
+      // pausado e é ignorado — sem refresh visível, sem perder atualizações
+      // futuras de outros usuários.
+      clearTimeout(window._resumeRealtimeTimers && window._resumeRealtimeTimers[table]);
+      window._resumeRealtimeTimers = window._resumeRealtimeTimers || {};
+      window._resumeRealtimeTimers[table] = setTimeout(() => {
+        window._realtimePaused[table] = false;
+      }, 1500);
     };
 
     window._sbSaveBatch = async (table, newArr) => {
@@ -272,14 +442,54 @@ if (!window._useLocalFallback) {
     // ── DELETE EXPLÍCITO POR ID(s): única forma seguro de excluir no banco.
     // Sempre aponta para IDs específicos que o usuário pediu para excluir,
     // nunca depende de comparar o array local inteiro contra o estado remoto.
-    window._sbDeleteByIds = async (table, ids) => {
-      if (!ids || !ids.length) return;
-      const CHUNK = 500;
-      for (let i = 0; i < ids.length; i += CHUNK) {
-        const chunk = ids.slice(i, i + CHUNK);
-        const { error } = await _sb.from(table).delete().in('id', chunk);
-        if (error) console.error(`Supabase delete error [${table}] chunk ${i}:`, error.message || JSON.stringify(error));
+    window._sbDeleteByIds = async (table, ids, onProgress) => {
+      if (!ids || !ids.length) return { deletedIds: [], failedIds: [] };
+      // Garante strings — dataset.id do DOM é sempre string, mas uid() também é;
+      // a conversão explícita evita mismatch silencioso no .in() do Supabase.
+      const strIds = ids.map(id => String(id));
+      // Chunk menor que antes (100) — listas .in() muito longas podem gerar uma
+      // URL grande demais e o request falhar (414/erro de rede) sem aviso claro.
+      const CHUNK = 100;
+      const deletedIds = [];
+      const failedIds = [];
+      let lastErrorMsg = '';
+      let deleted = 0;
+
+      for (let i = 0; i < strIds.length; i += CHUNK) {
+        const chunk = strIds.slice(i, i + CHUNK);
+        let ok = false;
+        // Tenta até 3 vezes por lote — falhas de rede/timeout pontuais não devem
+        // deixar um pedaço inteiro sem excluir.
+        for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+          const { error } = await _sb.from(table).delete().in('id', chunk);
+          if (!error) { ok = true; break; }
+          lastErrorMsg = error.message || JSON.stringify(error);
+          console.error(`Supabase delete error [${table}] chunk ${i} tentativa ${attempt}:`, lastErrorMsg);
+          if (attempt < 3) await new Promise(r => setTimeout(r, 400 * attempt));
+        }
+        if (ok) {
+          deletedIds.push(...chunk);
+          deleted += chunk.length;
+        } else {
+          // Lote falhou após 3 tentativas — registra e SEGUE para os próximos
+          // lotes em vez de abortar tudo (o que deixava o restante intocado).
+          failedIds.push(...chunk);
+        }
+        if (onProgress) onProgress(deleted, strIds.length);
+        // pequena pausa entre chunks para não saturar o Supabase
+        if (i + CHUNK < strIds.length) await new Promise(r => setTimeout(r, 80));
       }
+
+      if (failedIds.length) {
+        const err = new Error(
+          `${failedIds.length} de ${strIds.length} registro(s) não foram excluídos (${table}). ` +
+          `Motivo: ${lastErrorMsg || 'erro desconhecido'}. Os demais foram excluídos normalmente — tente excluir os restantes novamente.`
+        );
+        err.deletedIds = deletedIds;
+        err.failedIds = failedIds;
+        throw err;
+      }
+      return { deletedIds, failedIds };
     };
 
   } catch(e) {
@@ -1832,11 +2042,41 @@ const DB = {
     window._cache.feiraos = remaining;
     if (!window._useLocalFallback && window._sbDeleteByIds) await window._sbDeleteByIds('feiraos', ids);
   },
-  deleteCandidatosByIds: async (ids) => {
-    const remaining = DB.candidatos().filter(x => !ids.includes(x.id));
-    _LS.set('candidatos', remaining);
-    window._cache.candidatos = remaining;
-    if (!window._useLocalFallback && window._sbDeleteByIds) await window._sbDeleteByIds('candidatos', ids);
+  deleteCandidatosByIds: async (ids, onProgress) => {
+    // 1. Pausa o realtime para que os eventos gerados pelos deletes
+    //    não recarreguem o banco por cima enquanto a operação está em curso.
+    if (window._pauseRealtime) window._pauseRealtime('candidatos');
+    let actuallyDeleted = ids; // por padrão assume que tudo foi excluído (fallback local)
+    try {
+      // 2. Exclui no Supabase PRIMEIRO — se falhar, lança exceção antes de tocar no cache.
+      if (!window._useLocalFallback && window._sbDeleteByIds) {
+        try {
+          await window._sbDeleteByIds('candidatos', ids, onProgress);
+        } catch(e) {
+          // Falha parcial: alguns lotes foram excluídos, outros não.
+          // Atualiza o cache só com os que realmente saíram do banco e
+          // repropaga o erro para o chamador avisar o usuário.
+          actuallyDeleted = e.deletedIds || [];
+          if (actuallyDeleted.length) {
+            const strIdsOk = new Set(actuallyDeleted.map(id => String(id)));
+            const remaining = DB.candidatos().filter(x => !strIdsOk.has(String(x.id)));
+            window._cache.candidatos = remaining;
+            _LS.set('candidatos', remaining);
+          }
+          throw e;
+        }
+      } else if (onProgress) {
+        onProgress(ids.length, ids.length);
+      }
+      // 3. Só atualiza cache local após confirmação do banco.
+      const strIds = new Set(actuallyDeleted.map(id => String(id)));
+      const remaining = DB.candidatos().filter(x => !strIds.has(String(x.id)));
+      window._cache.candidatos = remaining;
+      _LS.set('candidatos', remaining);
+    } finally {
+      // 4. Retoma realtime sempre, mesmo se der erro
+      if (window._resumeRealtime) window._resumeRealtime('candidatos');
+    }
   },
   // ── Upsert de UM candidato: atualiza cache local e envia só esse registro ao Supabase.
   // Muito mais eficiente que saveCandidatos() com 30k+ registros.
@@ -2031,7 +2271,7 @@ function toast(msg, type='info') {
   t.className = `toast toast-${type}`;
   t.innerHTML = (type==='success'?'✓ ':type==='error'?'✗ ':'ℹ ') + msg;
   document.getElementById('toast-container').appendChild(t);
-  setTimeout(()=>t.remove(), 3500);
+  setTimeout(()=>t.remove(), type==='error' ? 7000 : 3500);
 }
 
 // ═══════════════════════════════════════
@@ -2287,6 +2527,7 @@ function openFeiraModal(id=null) {
 
 async function saveFeirao() {
   const nome = document.getElementById('mf-nome').value.trim();
+  // _opStart chamado apos validacoes (evita bloquear se houver erro de validacao)
   const data = document.getElementById('mf-data').value;
   const local = document.getElementById('mf-local').value.trim();
   const status = document.getElementById('mf-status').value;
@@ -2319,6 +2560,7 @@ async function saveFeirao() {
   }
 
   if(!recId||!recNome){toast('Recrutador é obrigatório','error');return;}
+  window._opStart('Salvando feirao…');
   let all = DB.feiraos();
   if(editFeiraId) {
     const idx = all.findIndex(x=>x.id===editFeiraId);
@@ -2383,30 +2625,48 @@ async function saveFeirao() {
     renderFeiraos();
     return;
   }
-  await DB.saveFeiraos(all);
+  try {
+    await DB.saveFeiraos(all);
+    toast('Feirao salvo!','success');
+  } catch(e) {
+    toast('Erro ao salvar: '+(e.message||'tente novamente'),'error');
+  } finally {
+    window._opEnd();
+  }
   closeModal('modal-feirao');
-  renderFeiraos();
 }
 
 function deleteFeirao(id) {
-  confirm_('Tem certeza que deseja excluir este feirão e todos os seus candidatos?', async () => {
-    const candsDoFeirao = DB.candidatos().filter(x => x.feiraoId === id).map(x => x.id);
-    const eventosDoFeirao = DB.eventos().filter(e => e.feiraoLink === id).map(e => e.id);
-    await DB.deleteFeiraosByIds([id]);
-    if (candsDoFeirao.length) await DB.deleteCandidatosByIds(candsDoFeirao);
-    if (eventosDoFeirao.length) await DB.deleteEventosByIds(eventosDoFeirao);
-    toast('Feirão excluído!','success');
-    renderFeiraos();
+  confirm_('Tem certeza que deseja excluir este feirao e todos os seus candidatos?', async () => {
+    window._opStart('Excluindo feirao…');
+    try {
+      const candsDoFeirao = DB.candidatos().filter(x => x.feiraoId === id).map(x => x.id);
+      const eventosDoFeirao = DB.eventos().filter(e => e.feiraoLink === id).map(e => e.id);
+      await DB.deleteFeiraosByIds([id]);
+      if (candsDoFeirao.length) await DB.deleteCandidatosByIds(candsDoFeirao);
+      if (eventosDoFeirao.length) await DB.deleteEventosByIds(eventosDoFeirao);
+      toast('Feirao excluido!','success');
+    } catch(e) {
+      toast('Erro ao excluir feirao: '+(e.message||'tente novamente'),'error');
+    } finally {
+      window._opEnd();
+    }
   });
 }
 
 async function toggleFeirao(id) {
-  let all = DB.feiraos();
-  const idx = all.findIndex(x=>x.id===id);
-  all[idx].statusFeirao = all[idx].statusFeirao==='ABERTO' ? 'ENCERRADO' : 'ABERTO';
-  await DB.saveFeiraos(all);
-  toast(`Feirão ${all[idx].statusFeirao==='ABERTO'?'reaberto':'encerrado'}!`,'success');
-  renderFeiraos();
+  window._opStart('Atualizando feirao…');
+  try {
+    let all = DB.feiraos();
+    const idx = all.findIndex(x=>x.id===id);
+    all[idx].statusFeirao = all[idx].statusFeirao==='ABERTO' ? 'ENCERRADO' : 'ABERTO';
+    await DB.saveFeiraos(all);
+    toast(`Feirao ${all[idx].statusFeirao==='ABERTO'?'reaberto':'encerrado'}!`,'success');
+  } catch(e) {
+    toast('Erro: '+(e.message||'tente novamente'),'error');
+  } finally {
+    window._opEnd();
+  }
 }
 
 let _feirasModo = 'mes';
@@ -2430,6 +2690,7 @@ function setFeirasModo(modo) {
 function onFeirasModoChange() { setFeirasModo(_feirasModo); }
 
 function renderFeiraos() {
+  if (window._safeRender && window._safeRender('feiraos')) return;
   const feiraos = DB.feiraos();
   const cands = DB.candidatos();
   const q = normStr(document.getElementById('f-search-feirao')?.value||'');
@@ -2687,9 +2948,16 @@ async function saveCandidato() {
   };
   applyRuleEngine(c);
   // ── Upsert individual: atualiza só este registro no Supabase (não reenvia os 30k+)
-  await DB.upsertCandidato(c);
+  window._opStart('Salvando candidato…');
+  try {
+    await DB.upsertCandidato(c);
+    toast(editCandId?'Candidato atualizado!':'Candidato salvo!','success');
+  } catch(e) {
+    toast('Erro ao salvar: '+(e.message||'tente novamente'),'error');
+  } finally {
+    window._opEnd();
+  }
   closeModal('modal-cand');
-  toast(editCandId?'Candidato atualizado!':'Candidato salvo!','success');
   if(ant==='REPROVADO' || recont==='REPROVADO') {
     setTimeout(() => toast('⚠ Atenção: candidato possui reprovação em antecedentes ou ex-colaborador.','info'), 400);
   }
@@ -2698,9 +2966,15 @@ async function saveCandidato() {
 
 function deleteCandidato(id) {
   confirm_('Excluir este candidato?', async () => {
-    await DB.deleteCandidatosByIds([id]);
-    toast('Candidato excluído!','success');
-    renderCandidatos();
+    window._opStart('Excluindo candidato…');
+    try {
+      await DB.deleteCandidatosByIds([id]);
+      toast('Candidato excluído!','success');
+    } catch(e) {
+      toast('Erro ao excluir: '+(e.message||'tente novamente'),'error');
+    } finally {
+      window._opEnd();
+    }
   });
 }
 
@@ -2756,7 +3030,7 @@ function _isReprovadoConsolidado(c) {
 }
 
 function getFilteredCandidatos() {
-  let cands = DB.candidatos();
+  const cands = DB.candidatos();
   const fid    = document.getElementById('f-feirao-cand')?.value||'';
   const q      = normStr(document.getElementById('f-nome-cand')?.value||'');
   const qr     = document.getElementById('f-rec-cand')?.value||'';
@@ -2764,29 +3038,37 @@ function getFilteredCandidatos() {
   const qa     = document.getElementById('f-ant-cand')?.value||'';
   const qrecont= document.getElementById('f-recont-cand')?.value||'';
   const qadm   = document.getElementById('f-admitido-cand')?.value||'';
-  const qetapa  = document.getElementById('f-etapa-cand')?.value||'';
-  // f-cidade-cand removido — busca unificada em f-nome-cand
+  const qetapa = document.getElementById('f-etapa-cand')?.value||'';
+  const qDigits = q ? q.replace(/[^0-9]/g,'') : '';
+  const qHasDigits = /[0-9]/.test(q);
+
+  // Sem nenhum filtro ativo: retorna tudo sem iterar
+  if (!fid && !q && !qr && !qs && !qa && !qrecont && !qadm && !qetapa) return cands;
 
   return cands.filter(c => {
-    // Filtro de status: comparação exata com statusProcesso
-    const statusOk = !qs || c.statusProcesso === qs;
-
-    return (
-      (!fid    || c.feiraoId === fid) &&
-      (!q      || normStr(c.nome).includes(q) || normStr(c.cidade||c.feiraoLocal||'').includes(q) || normStr(c.cargo||'').includes(q) || (/[0-9]/.test(q) && (c.cpf||'').replace(/[^0-9]/g,'').includes(q.replace(/[^0-9]/g,'')))) &&
-      (!qr     || c.recrutadorId === qr) &&
-      statusOk &&
-      (!qa     || c.antecedentes === qa) &&
-      (!qrecont|| c.recontratacao === qrecont) &&
-      (!qadm   || (qadm === '1' ? c.admitido : !c.admitido)) &&
-      (!qetapa  || c.etapaProcesso === qetapa) &&
-      (true) // cidade incluída no campo unificado acima
-    );
+    if (fid    && c.feiraoId !== fid) return false;
+    if (qr     && c.recrutadorId !== qr) return false;
+    if (qs     && c.statusProcesso !== qs) return false;
+    if (qa     && c.antecedentes !== qa) return false;
+    if (qrecont&& c.recontratacao !== qrecont) return false;
+    if (qadm   && (qadm === '1' ? !c.admitido : c.admitido)) return false;
+    if (qetapa && c.etapaProcesso !== qetapa) return false;
+    if (q) {
+      const nomeOk   = normStr(c.nome).includes(q);
+      const cidadeOk = normStr(c.cidade||c.feiraoLocal||'').includes(q);
+      const cargoOk  = normStr(c.cargo||'').includes(q);
+      const cpfOk    = qHasDigits && (c.cpf||'').replace(/[^0-9]/g,'').includes(qDigits);
+      if (!nomeOk && !cidadeOk && !cargoOk && !cpfOk) return false;
+    }
+    return true;
   });
 }
 
 function renderCandidatos(resetPage=false) {
+  if (window._safeRender && window._safeRender('candidatos')) { if(resetPage){_candPage=1;_selectAllPages=false;} return; }
   if(resetPage) { _candPage = 1; _selectAllPages = false; }
+  // Para volumes grandes, adia o filtro/render para não travar a navegação
+  const _doRenderCands = () => {
   const list = getFilteredCandidatos();
   const total = list.length;
   const totalPages = Math.max(1, Math.ceil(total / _CAND_PER_PAGE));
@@ -2822,6 +3104,16 @@ function renderCandidatos(resetPage=false) {
   </tr>`).join('');
   updateBulkBar();
   renderCandPagination(total, _candPage, totalPages);
+  }; // fim _doRenderCands
+  if (DB.candidatos().length > 3000) {
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(_doRenderCands, { timeout: 300 });
+    } else {
+      setTimeout(_doRenderCands, 0);
+    }
+  } else {
+    _doRenderCands();
+  }
 }
 
 function renderCandPagination(total, page, totalPages) {
@@ -2952,22 +3244,73 @@ function deselectAll() {
 }
 
 async function bulkDeleteCandidatos() {
-  const ids = _selectAllPages
-    ? getFilteredCandidatos().map(c => c.id)
-    : [...document.querySelectorAll('.cand-chk:checked')].map(c => c.dataset.id);
-  if(!ids.length) return;
+  // Captura os IDs e o total ANTES de abrir o confirm_, usando snapshot
+  // do estado atual — os checkboxes e o filtro podem mudar depois.
+  const idsSnapshot = _selectAllPages
+    ? getFilteredCandidatos().map(c => String(c.id))
+    : [...document.querySelectorAll('.cand-chk:checked')].map(c => String(c.dataset.id));
+  if(!idsSnapshot.length) return;
+  const totalSnapshot = idsSnapshot.length;
   const btnDel = document.getElementById('btn-bulk-delete');
-  confirm_(`Excluir ${ids.length} candidato(s) selecionado(s)? Essa ação não pode ser desfeita.`, async () => {
+
+  confirm_(`Excluir ${totalSnapshot} candidato(s) selecionado(s)? Essa ação não pode ser desfeita.`, async () => {
     if(btnDel) { btnDel.disabled = true; btnDel.textContent = 'Excluindo…'; }
+    window._opStart('Excluindo candidatos…');
+
+    // ── Barra de progresso de exclusão ──────────────────────────────
+    let progressBar = null;
+    function showDeleteProgress(done, total) {
+      const pct = Math.round((done / total) * 100);
+      if (!progressBar) {
+        progressBar = document.createElement('div');
+        progressBar.id = '_sb-delete-progress';
+        progressBar.style.cssText = [
+          'position:fixed;bottom:24px;right:24px;z-index:99999',
+          'background:#0d2142;color:#fff;border-radius:14px',
+          'padding:16px 22px;box-shadow:0 8px 32px rgba(0,0,0,.35)',
+          'min-width:300px;font-family:inherit'
+        ].join(';');
+        progressBar.innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <svg width="18" height="18" fill="none" stroke="#f87171" stroke-width="2" viewBox="0 0 24 24">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            </svg>
+            <span id="_sb-delete-title" style="font-size:.88rem;font-weight:700;letter-spacing:.01em">Excluindo candidatos…</span>
+          </div>
+          <div style="background:rgba(255,255,255,.12);border-radius:999px;height:10px;overflow:hidden;margin-bottom:8px">
+            <div id="_sb-delete-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#ef4444,#f87171);border-radius:999px;transition:width .25s ease"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span id="_sb-delete-label" style="font-size:.78rem;color:#fca5a5">0 / ${total} excluídos</span>
+            <span id="_sb-delete-pct" style="font-size:.82rem;font-weight:700;color:#f87171">0%</span>
+          </div>
+        `;
+        document.body.appendChild(progressBar);
+      }
+      const fill  = document.getElementById('_sb-delete-fill');
+      const label = document.getElementById('_sb-delete-label');
+      const pctEl = document.getElementById('_sb-delete-pct');
+      if (fill)  fill.style.width  = pct + '%';
+      if (label) label.textContent = `${done} / ${total} excluídos`;
+      if (pctEl) pctEl.textContent = pct + '%';
+    }
+    function hideDeleteProgress() {
+      if (progressBar) { progressBar.remove(); progressBar = null; }
+    }
+
     try {
-      await DB.deleteCandidatosByIds(ids);
-      renderCandidatos();
-      toast(`${ids.length} candidato(s) excluído(s)!`, 'success');
+      await DB.deleteCandidatosByIds(idsSnapshot, (done, total) => showDeleteProgress(done, total));
+      showDeleteProgress(totalSnapshot, totalSnapshot); // 100%
+      await new Promise(r => setTimeout(r, 400));
+      hideDeleteProgress();
+      toast(`${totalSnapshot} candidato(s) excluído(s)!`, 'success');
     } catch(e) {
+      hideDeleteProgress();
       toast('Erro ao excluir: ' + (e.message||'tente novamente'), 'error');
       if(window._initSupabase) await window._initSupabase();
-      renderCandidatos();
     } finally {
+      window._opEnd(); // libera overlay e dispara render unico
       if(btnDel) { btnDel.disabled = false; btnDel.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg> Excluir'; }
     }
   });
@@ -2993,6 +3336,7 @@ async function bulkEditCandidatos() {
   // Botão de aplicar desabilitado durante o save
   const btnAplicar = document.querySelector('#bulk-action-bar .btn-primary');
   if(btnAplicar) { btnAplicar.disabled = true; btnAplicar.textContent = 'Salvando…'; }
+  window._opStart('Salvando alterações…');
 
   try {
     const alterados = [];
@@ -3008,11 +3352,8 @@ async function bulkEditCandidatos() {
       alterados.push(updated);
       return updated;
     });
-    // Atualiza cache local imediatamente para a tela responder rápido
     window._cache.candidatos = cands;
     if (cands.length <= 3000) _LS.set('candidatos', cands);
-    renderCandidatos();
-    // Envia ao Supabase APENAS os registros alterados
     if (window._sbUpsertOnly) {
       await window._sbUpsertOnly('candidatos', alterados);
     } else {
@@ -3026,10 +3367,9 @@ async function bulkEditCandidatos() {
     toast(`${ids.size} candidato(s) atualizados com sucesso!`, 'success');
   } catch(e) {
     toast('Erro ao salvar: ' + (e.message||'tente novamente'), 'error');
-    // Recarrega do banco para garantir consistência
     if(window._initSupabase) await window._initSupabase();
-    renderCandidatos();
   } finally {
+    window._opEnd(); // libera overlay e dispara render unico
     if(btnAplicar) { btnAplicar.disabled = false; btnAplicar.textContent = '✔ Aplicar'; }
   }
 }
@@ -3083,26 +3423,38 @@ async function saveRecrutador() {
     all.push({id:uid(), nome});
     toast('Recrutador criado!','success');
   }
-  await DB.saveRecrutadores(all);
+  window._opStart('Salvando recrutador…');
+  try {
+    await DB.saveRecrutadores(all);
+    populateMfRecSelect(document.getElementById('mf-rec-id')?.value||'');
+    populateAnRecSelect();
+    populateFeiraoSelects();
+  } catch(e) {
+    toast('Erro ao salvar: '+(e.message||'tente novamente'),'error');
+  } finally {
+    window._opEnd();
+  }
   closeModal('modal-rec');
-  renderRecrutadores();
-  // Refresh recruiter select in feirão modal if it's open
-  populateMfRecSelect(document.getElementById('mf-rec-id')?.value||'');
-  populateAnRecSelect();
-  populateFeiraoSelects();
 }
 
 function deleteRecrutador(id) {
   const inUse = DB.feiraos().find(f=>f.recrutadorId===id);
   if(inUse){toast('Recrutador em uso em um feirão, não pode ser excluído!','error');return;}
   confirm_('Excluir este recrutador?', async ()=>{
-    await DB.deleteRecrutadoresByIds([id]);
-    toast('Recrutador excluído!','success');
-    renderRecrutadores();
+    window._opStart('Excluindo recrutador…');
+    try {
+      await DB.deleteRecrutadoresByIds([id]);
+      toast('Recrutador excluído!','success');
+    } catch(e) {
+      toast('Erro: '+(e.message||'tente novamente'),'error');
+    } finally {
+      window._opEnd();
+    }
   });
 }
 
 function renderRecrutadores() {
+  if (window._safeRender && window._safeRender('recrutadores')) return;
   const recs = DB.recrutadores();
   const q = normStr(document.getElementById('f-rec-nome')?.value||'');
   const cands = DB.candidatos();
@@ -3156,6 +3508,7 @@ function switchRankTab(tab, btn) {
 }
 
 function renderDashboard() {
+  if (window._safeRender && window._safeRender('dashboard')) return;
   // ── Cálculo pesado (iterar 20k+ candidatos) adiado para quando o browser estiver ocioso.
   // A tela abre imediatamente com os cards de estatística em skeleton,
   // e os números aparecem assim que o cálculo terminar (geralmente <200ms).
@@ -3776,7 +4129,8 @@ function removeImpRow(rowKey) {
 
 async function confirmImport() {
   const fid = document.getElementById('imp-feirao').value;
-  if(!fid){toast('Selecione um feirão de destino','error');return;}
+  if(!fid){toast('Selecione um feirao de destino','error');return;}
+  window._opStart('Importando candidatos…');
   const f = DB.feiraos().find(x=>x.id===fid);
   if(!f){toast('Feirão não encontrado','error');return;}
   // ── Usa o cache direto sem clonar — com 20k candidatos, .slice() desperdiça
@@ -3888,6 +4242,7 @@ async function confirmImport() {
     document.getElementById('imp-errors').innerHTML = '<p class="text-muted text-sm">✅ Todos os registros foram importados com sucesso.</p>';
   }
 
+  window._opEnd(); // libera overlay e dispara render unico
   document.getElementById('btn-imp-confirm').style.display='none';
   importPreviewData=[];
   document.getElementById('imp-preview').innerHTML='<p class="text-muted text-sm text-center" style="padding:30px 0">Importação concluída!</p>';
@@ -5205,10 +5560,16 @@ async function saveEvent() {
 function deleteCurrentEvent() {
   if(!editEventId) return;
   confirm_('Excluir este evento?', async () => {
-    await DB.deleteEventosByIds([editEventId]);
+    window._opStart('Excluindo evento…');
+    try {
+      await DB.deleteEventosByIds([editEventId]);
+      toast('Evento excluído!','success');
+    } catch(e) {
+      toast('Erro: '+(e.message||'tente novamente'),'error');
+    } finally {
+      window._opEnd();
+    }
     closeModal('modal-event');
-    toast('Evento excluído!','success');
-    renderCalendar();
   });
 }
 
@@ -5321,24 +5682,106 @@ function maskTel(i) {
 window._appReady = false;
 
 async function initApp() {
-  // Mostra loading se Supabase estiver configurado
+  // ── LOADER COM BARRA DE PROGRESSO ────────────────────────────────────────
+  // Fica visivel ate TODAS as tabelas terminarem de carregar do Supabase.
+  // Enquanto o loader esta ativo, os refreshPage() intermediarios do _loadTable
+  // sao bloqueados via flag -- evita o "piscar" de dados mudando na tela.
   let loader = null;
+
   if (!window._useLocalFallback && window._initSupabase) {
+    // Flag que bloqueia renders intermediarios durante o carregamento inicial
+    window._loadingBlocked = true;
+
+    const TABELAS = [
+      { key: 'feiraos',      label: 'Feiraes' },
+      { key: 'candidatos',   label: 'Candidatos' },
+      { key: 'recrutadores', label: 'Recrutadores' },
+      { key: 'eventos',      label: 'Eventos' },
+    ];
+    const totalTabelas = TABELAS.length;
+    let tabelasOk = 0;
+
     loader = document.createElement('div');
-    loader.style.cssText = 'position:fixed;inset:0;background:rgba(10,22,40,.93);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#fff';
+    loader.id = '_app-loader';
+    loader.style.cssText = [
+      'position:fixed;inset:0;z-index:9999',
+      'background:linear-gradient(135deg,#0a1628 0%,#0d2142 60%,#0a1628 100%)',
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0',
+      'color:#fff;font-family:inherit',
+      'transition:opacity .4s ease',
+    ].join(';');
+
     loader.innerHTML = `
-      <svg width="50" height="50" fill="none" stroke="#60a5fa" stroke-width="2" viewBox="0 0 24 24"
-        style="animation:_spin 1s linear infinite">
-        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-      </svg>
-      <div style="font-size:1.05rem;font-weight:700">Conectando ao Supabase…</div>
-      <div style="font-size:.82rem;color:#93c5fd;opacity:.8">Sincronizando dados em tempo real</div>
-      <style>@keyframes _spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>
+      <style>
+        @keyframes _spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        @keyframes _pulse { 0%,100%{opacity:.7} 50%{opacity:1} }
+      </style>
+      <div style="margin-bottom:28px;animation:_pulse 2s ease-in-out infinite">
+        <svg width="56" height="56" fill="none" stroke="#3b82f6" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+            style="animation:_spin 1.4s linear infinite;transform-origin:center"/>
+        </svg>
+      </div>
+      <div style="font-size:1.15rem;font-weight:800;letter-spacing:.02em;margin-bottom:6px">Carregando sistema...</div>
+      <div id="_loader-sub" style="font-size:.82rem;color:#93c5fd;margin-bottom:28px;min-height:18px">Conectando ao Supabase</div>
+      <div style="width:320px;max-width:90vw">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+          <span style="font-size:.78rem;color:#93c5fd;font-weight:600">Progresso geral</span>
+          <span id="_loader-pct" style="font-size:.82rem;font-weight:800;color:#60a5fa">0%</span>
+        </div>
+        <div style="background:rgba(255,255,255,.1);border-radius:999px;height:12px;overflow:hidden;margin-bottom:20px">
+          <div id="_loader-fill" style="height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#60a5fa,#93c5fd);transition:width .35s cubic-bezier(.4,0,.2,1)"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px" id="_loader-rows"></div>
+      </div>
+      <div style="margin-top:28px;font-size:.73rem;color:#475569">Aguarde - os dados serao exibidos assim que tudo estiver pronto</div>
     `;
     document.body.appendChild(loader);
-    // Timeout de 8s — tempo suficiente para conectar sem prender o usuário por muito tempo
+
+    // Monta as linhas de cada tabela
+    const rowsContainer = document.getElementById('_loader-rows');
+    TABELAS.forEach(t => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px';
+      row.innerHTML =
+        '<span style="font-size:.75rem;color:#94a3b8;width:90px;flex-shrink:0">' + t.label + '</span>' +
+        '<div style="flex:1;background:rgba(255,255,255,.08);border-radius:999px;height:6px;overflow:hidden">' +
+          '<div id="_lfill-' + t.key + '" style="height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#60a5fa);transition:width .3s ease"></div>' +
+        '</div>' +
+        '<span id="_lpct-' + t.key + '" style="font-size:.72rem;color:#64748b;width:32px;text-align:right">0%</span>' +
+        '<span id="_lok-' + t.key + '" style="font-size:.85rem;opacity:0;transition:opacity .3s">✅</span>';
+      rowsContainer.appendChild(row);
+    });
+
+    function setTableProgress(key, pct) {
+      const fill  = document.getElementById('_lfill-' + key);
+      const pctEl = document.getElementById('_lpct-'  + key);
+      const ok    = document.getElementById('_lok-'   + key);
+      if (fill)  fill.style.width  = Math.min(pct, 100) + '%';
+      if (pctEl) pctEl.textContent = Math.min(pct, 100) + '%';
+      if (ok && pct >= 100) ok.style.opacity = '1';
+    }
+
+    function setGlobalProgress(done, total) {
+      const pct  = Math.round((done / total) * 100);
+      const fill  = document.getElementById('_loader-fill');
+      const pctEl = document.getElementById('_loader-pct');
+      if (fill)  fill.style.width  = pct + '%';
+      if (pctEl) pctEl.textContent = pct + '%';
+    }
+
+    // Expoe para o _loadTable usar durante o carregamento
+    window._loaderSetTableProgress = setTableProgress;
+    window._loaderMarkTableDone = function(key) {
+      setTableProgress(key, 100);
+      tabelasOk++;
+      setGlobalProgress(tabelasOk, totalTabelas);
+      const sub = document.getElementById('_loader-sub');
+      if (sub) sub.textContent = tabelasOk + ' de ' + totalTabelas + ' tabelas carregadas';
+    };
+
     let timedOut = false;
-    const timeout = new Promise(r => setTimeout(() => { timedOut = true; r(); }, 8000));
+    const timeout = new Promise(r => setTimeout(function() { timedOut = true; r(); }, 12000));
     try {
       await Promise.race([window._initSupabase(), timeout]);
     } catch(e) {
@@ -5346,11 +5789,39 @@ async function initApp() {
       window._useLocalFallback = true;
     }
     if (timedOut && !window._cacheReady.feiraos) {
-      console.warn('Supabase demorou demais — usando localStorage como fallback');
+      console.warn('Supabase demorou demais -- usando localStorage como fallback');
       window._useLocalFallback = true;
       window._showSetupWarning();
     }
+
+    // Garante 100% visual antes de fechar
+    TABELAS.forEach(t => setTableProgress(t.key, 100));
+    setGlobalProgress(totalTabelas, totalTabelas);
+    const sub = document.getElementById('_loader-sub');
+    if (sub) sub.textContent = 'Pronto! Abrindo o sistema...';
+
+    await new Promise(r => setTimeout(r, 500));
+
+    // Fade out suave
+    loader.style.opacity = '0';
+    await new Promise(r => setTimeout(r, 400));
     loader.remove();
+
+    // Libera renders -- agora a tela aparece com os dados completos de uma vez
+    window._loadingBlocked = false;
+    window._loaderSetTableProgress = null;
+    window._loaderMarkTableDone = null;
+
+    // So agora configura o realtime -- depois do loader fechar e dos dados prontos.
+    // Isso evita que eventos cheguem e disparem refreshPage enquanto a tela
+    // ainda estava sendo montada (causa do "piscar" residual).
+    if (window._pendingRealtimeTables) {
+      window._pendingRealtimeTables.forEach(t => {
+        try { _setupRealtime(t); } catch(e) { console.warn('Realtime setup failed for', t, e); }
+      });
+      window._pendingRealtimeTables = null;
+    }
+    if (window._initHadFailure) window._showSetupWarning();
   }
 
   window._appReady = true;
