@@ -326,8 +326,16 @@ if (!window._useLocalFallback) {
     // ── PAUSA / RETOMA O REALTIME de uma tabela específica durante importações.
     // Evita que cada chunk de upsert dispare uma releitura completa da tabela,
     // o que causava lentidão perceptível em importações grandes (500+ candidatos).
+    window._realtimePauseCount = window._realtimePauseCount || {};
+
     window._pauseRealtime = (table) => {
-      // Seta a flag — o listener vai ignorar eventos enquanto a flag estiver ativa
+      // Contador em vez de booleano simples: se duas operações na MESMA tabela
+      // estiverem em andamento ao mesmo tempo (ex: editar um candidato enquanto
+      // uma exclusão em massa ainda está em curso), cada uma incrementa o
+      // contador. Sem isso, a operação que termina primeiro "destrava" o
+      // realtime antes da outra acabar, e o eco da segunda escrita volta a
+      // causar o refresh visível.
+      window._realtimePauseCount[table] = (window._realtimePauseCount[table] || 0) + 1;
       window._realtimePaused[table] = true;
     };
 
@@ -340,10 +348,13 @@ if (!window._useLocalFallback) {
       // terminado. Esperando um pouco, o eco chega ENQUANTO ainda está
       // pausado e é ignorado — sem refresh visível, sem perder atualizações
       // futuras de outros usuários.
-      clearTimeout(window._resumeRealtimeTimers && window._resumeRealtimeTimers[table]);
-      window._resumeRealtimeTimers = window._resumeRealtimeTimers || {};
-      window._resumeRealtimeTimers[table] = setTimeout(() => {
-        window._realtimePaused[table] = false;
+      // Só destrava de fato quando TODAS as operações pendentes nessa tabela
+      // já tiverem chamado resume (contador chega a zero).
+      setTimeout(() => {
+        window._realtimePauseCount[table] = Math.max(0, (window._realtimePauseCount[table] || 1) - 1);
+        if (window._realtimePauseCount[table] === 0) {
+          window._realtimePaused[table] = false;
+        }
       }, 1500);
     };
 
