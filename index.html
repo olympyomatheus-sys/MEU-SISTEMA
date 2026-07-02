@@ -1262,7 +1262,7 @@ thead th {
           <p class="text-muted text-sm" id="cand-count-label"></p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="exportCandidatosExcel()">Excel</button>
+          <button class="btn btn-secondary btn-sm" onclick="promptExportCandidatos()">Excel</button>
           <button class="btn btn-secondary btn-sm" onclick="exportCandidatosPDF()">PDF</button>
           <div id="bulk-action-bar" style="display:none;align-items:center;gap:6px;flex-wrap:wrap">
             <span id="bulk-count-label" style="font-size:.8rem;font-weight:700;color:var(--blue-700);white-space:nowrap">0 selecionados</span>
@@ -1663,6 +1663,18 @@ thead th {
           <input id="mf-rec-input" type="hidden"/>
           <input id="mf-rec-id" type="hidden"/>
           <div class="autocomplete-list" id="mf-rec-list" style="display:none"></div>
+          <div style="margin-top:8px">
+            <span id="mf-extra-rec-link" onclick="mfToggleExtraRec()" style="font-size:.74rem;color:var(--gray-500);cursor:pointer;text-decoration:underline dotted">+ incluir outro recrutador neste feirão</span>
+            <div id="mf-extra-rec-wrap" style="display:none;margin-top:8px;padding:8px;background:var(--gray-50);border-radius:8px">
+              <div style="display:flex;gap:6px;align-items:center">
+                <select id="mf-extra-rec-select" style="flex:1;font-size:.78rem;padding:5px 8px">
+                  <option value="">Selecione um recrutador…</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-sm" style="font-size:.72rem;padding:5px 10px;flex-shrink:0" onclick="mfAddExtraRec()">Adicionar</button>
+              </div>
+              <div id="mf-extra-rec-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label>Status</label>
@@ -1890,6 +1902,75 @@ thead th {
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-confirm')">Cancelar</button>
       <button class="btn btn-danger" id="confirm-btn" onclick="">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT: CONJUNTA OU SEPARADA (feirão com mais de um recrutador) -->
+<div class="modal-overlay" id="modal-imp-tipo">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">Importar Candidatos</span>
+      <button class="modal-close" onclick="closeModal('modal-imp-tipo')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.9rem;color:var(--gray-700)">Este feirão tem mais de um recrutador vinculado. Esta planilha é <strong>conjunta</strong> (recrutador principal do feirão) ou <strong>separada</strong> (você vai informar de qual recrutador é)?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="impTipoSeparada()">Separada</button>
+      <button class="btn btn-primary" onclick="impTipoConjunta()">Conjunta</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT: RECRUTADOR RESPONSÁVEL (SEPARADA) -->
+<div class="modal-overlay" id="modal-imp-rec">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">Recrutador Responsável</span>
+      <button class="modal-close" onclick="closeModal('modal-imp-rec')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Esta planilha pertence a qual recrutador?</label>
+        <select id="modal-imp-rec-select" style="width:100%"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-imp-rec')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmImportSeparado()">Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT: CONJUNTA OU SEPARADA -->
+<div class="modal-overlay" id="modal-exp-tipo">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">Exportar Planilha</span>
+      <button class="modal-close" onclick="closeModal('modal-exp-tipo')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.9rem;color:var(--gray-700)">A planilha será compartilhada de forma <strong>conjunta</strong> (todos os candidatos em um único arquivo) ou <strong>separada por recrutador</strong> (um arquivo para cada)?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="expTipoSeparada()">Separada</button>
+      <button class="btn btn-primary" onclick="expTipoConjunta()">Conjunta</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT: RESPONSÁVEIS POR GRUPO (SEPARADA) -->
+<div class="modal-overlay" id="modal-exp-rec">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title">Recrutador Responsável de Cada Planilha</span>
+      <button class="modal-close" onclick="closeModal('modal-exp-rec')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-exp-rec-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-exp-rec')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmExportSeparada()">Exportar</button>
     </div>
   </div>
 </div>
@@ -2502,6 +2583,57 @@ function populateMfRecSelect(selectedId = '') {
 }
 
 // ═══════════════════════════════════════
+// FEIRÃO MODAL – RECRUTADORES ADICIONAIS (opcional)
+// Permite vincular mais de um recrutador ao mesmo feirão,
+// sem alterar o fluxo principal (recrutador responsável continua único).
+// ═══════════════════════════════════════
+window._mfExtraRecList = []; // [{id, nome}]
+
+function mfToggleExtraRec() {
+  const wrap = document.getElementById('mf-extra-rec-wrap');
+  if (!wrap) return;
+  const show = wrap.style.display === 'none';
+  wrap.style.display = show ? 'block' : 'none';
+  if (show) mfPopulateExtraRecSelect();
+}
+
+function mfPopulateExtraRecSelect() {
+  const sel = document.getElementById('mf-extra-rec-select');
+  if (!sel) return;
+  const primaryId = document.getElementById('mf-rec-id').value;
+  const jaAdicionados = window._mfExtraRecList.map(r => r.id);
+  const recs = DB.recrutadores().slice().sort((a,b)=>a.nome.localeCompare(b.nome))
+    .filter(r => r.id !== primaryId && !jaAdicionados.includes(r.id));
+  sel.innerHTML = '<option value="">Selecione um recrutador…</option>' +
+    recs.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('');
+}
+
+function mfAddExtraRec() {
+  const sel = document.getElementById('mf-extra-rec-select');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  window._mfExtraRecList.push({ id: opt.value, nome: opt.text });
+  mfRenderExtraRecChips();
+  mfPopulateExtraRecSelect();
+}
+
+function mfRemoveExtraRec(id) {
+  window._mfExtraRecList = window._mfExtraRecList.filter(r => r.id !== id);
+  mfRenderExtraRecChips();
+  mfPopulateExtraRecSelect();
+}
+
+function mfRenderExtraRecChips() {
+  const box = document.getElementById('mf-extra-rec-chips');
+  if (!box) return;
+  box.innerHTML = window._mfExtraRecList.map(r => `
+    <span style="display:inline-flex;align-items:center;gap:4px;background:var(--white);border:1px solid var(--gray-300);border-radius:999px;padding:2px 8px;font-size:.72rem;color:var(--gray-700)">
+      ${esc(r.nome)}
+      <span onclick="mfRemoveExtraRec('${r.id}')" style="cursor:pointer;color:var(--gray-400);font-weight:700" title="Remover">✕</span>
+    </span>`).join('');
+}
+
+// ═══════════════════════════════════════
 // FEIRÕES CRUD
 // ═══════════════════════════════════════
 let editFeiraId = null;
@@ -2519,6 +2651,7 @@ function openFeiraModal(id=null) {
     document.getElementById('mf-rec-id').value = f.recrutadorId;
     document.getElementById('mf-status').value = f.statusFeirao;
     document.getElementById('mf-obs').value = f.observacoes||'';
+    window._mfExtraRecList = (f.recrutadoresExtras || []).slice();
   } else {
     document.getElementById('mf-nome').value='';
     document.getElementById('mf-data').value='';
@@ -2529,10 +2662,15 @@ function openFeiraModal(id=null) {
     document.getElementById('mf-status').value='ABERTO';
     document.getElementById('mf-obs').value='';
     if(document.getElementById('mf-rec-new-nome')) document.getElementById('mf-rec-new-nome').value='';
+    window._mfExtraRecList = [];
   }
   // Always start on "selecionar existente" tab
   mfRecTab('sel');
   document.getElementById('mf-rec-list').style.display='none';
+  // Recrutadores adicionais (opcional) — recolhido por padrão para não chamar atenção
+  const extraWrap = document.getElementById('mf-extra-rec-wrap');
+  if (extraWrap) extraWrap.style.display = 'none';
+  mfRenderExtraRecChips();
   openModal('modal-feirao');
 }
 
@@ -2571,12 +2709,14 @@ async function saveFeirao() {
   }
 
   if(!recId||!recNome){toast('Recrutador é obrigatório','error');return;}
+  // Recrutadores adicionais (opcional) — não afeta o recrutador responsável principal
+  const recrutadoresExtras = (window._mfExtraRecList || []).filter(r => r.id !== recId);
   window._opStart('Salvando feirao…');
   let all = DB.feiraos();
   if(editFeiraId) {
     const idx = all.findIndex(x=>x.id===editFeiraId);
     const old = all[idx];
-    all[idx] = {...old, nomeFeirao:nome, dataEvento:data, localEvento:local, enderecoCompleto, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs};
+    all[idx] = {...old, nomeFeirao:nome, dataEvento:data, localEvento:local, enderecoCompleto, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs, recrutadoresExtras};
     const recrutadorMudou = old.recrutadorId !== recId || old.recrutadorNome !== recNome;
     const todosCandsAtual = DB.candidatos();
     const candsAtualizados = [];
@@ -2611,7 +2751,7 @@ async function saveFeirao() {
     toast('Feirão atualizado!','success');
   } else {
     const newId = uid();
-    const novoFeirao = {id:newId, nomeFeirao:nome, dataEvento:data, localEvento:local, enderecoCompleto, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs};
+    const novoFeirao = {id:newId, nomeFeirao:nome, dataEvento:data, localEvento:local, enderecoCompleto, recrutadorId:recId, recrutadorNome:recNome, statusFeirao:status, observacoes:obs, recrutadoresExtras};
     all.push(novoFeirao);
     // BUG FIX: salva o feirão ANTES do evento para evitar referência órfã
     await DB.saveFeiraos(all);
@@ -2774,7 +2914,7 @@ function renderFeiraos() {
         <div style="font-size:.71rem;color:var(--gray-500);display:flex;gap:8px;margin-top:1px;flex-wrap:wrap">
           ${f.dataEvento?`<span>${fmt(f.dataEvento)}</span>`:''}
           ${f.localEvento?`<span>· ${esc(f.localEvento)}</span>`:''}
-          ${f.recrutadorNome?`<span>· ${esc(f.recrutadorNome)}</span>`:''}
+          ${f.recrutadorNome?`<span>· ${esc(f.recrutadorNome)}${f.recrutadoresExtras&&f.recrutadoresExtras.length?` <span title="Também neste feirão: ${esc(f.recrutadoresExtras.map(r=>r.nome).join(', '))}" style="color:var(--gray-400);cursor:default">+${f.recrutadoresExtras.length}</span>`:''}</span>`:''}
         </div>
       </div>
       <!-- Métricas inline -->
@@ -3755,11 +3895,31 @@ function doGlobalSearch(q) {
   const dd = document.getElementById('search-results-dropdown');
   if(!q.trim()){dd.style.display='none';return;}
   const nq = normStr(q);
-  const cands = DB.candidatos().filter(c=>
-    normStr(c.nome).includes(nq)||normStr(c.cpf).includes(nq)||normStr(c.cr||'').includes(nq)||
-    normStr(c.recrutadorNome).includes(nq)||normStr(c.statusProcesso).includes(nq)||
-    normStr(c.cargo||'').includes(nq)||normStr(c.cidade||c.feiraoLocal||'').includes(nq)
-  ).slice(0,8);
+  // ── Relevância: nome tem prioridade sobre os demais campos, e dentro do nome,
+  // quem começa com o termo (ex: "Paulo Silva") vem antes de quem só contém o
+  // termo no meio (ex: "João Paulo Silva"). Isso evita que candidatos que só
+  // batem por cidade/cargo/recrutador empurrem para fora os que batem pelo nome.
+  function _candScore(c) {
+    const nome = normStr(c.nome);
+    if (nome === nq) return 0;                 // nome exatamente igual
+    if (nome.startsWith(nq)) return 1;          // nome começa com o termo
+    // bate em alguma "palavra" do nome (primeiro, do meio ou último nome)
+    if (nome.split(' ').some(part => part.startsWith(nq))) return 2;
+    if (nome.includes(nq)) return 3;            // termo aparece em qualquer posição do nome
+    if (normStr(c.cpf).includes(nq)) return 4;
+    if (normStr(c.cr||'').includes(nq)) return 5;
+    return 6;                                   // bateu só em cargo/cidade/recrutador/status
+  }
+  const cands = DB.candidatos()
+    .map(c => ({ c, score: _candScore(c) }))
+    .filter(({c, score}) =>
+      score <= 5 ||
+      normStr(c.recrutadorNome).includes(nq)||normStr(c.statusProcesso).includes(nq)||
+      normStr(c.cargo||'').includes(nq)||normStr(c.cidade||c.feiraoLocal||'').includes(nq)
+    )
+    .sort((a,b) => a.score - b.score || normStr(a.c.nome).localeCompare(normStr(b.c.nome)))
+    .slice(0,15)
+    .map(({c}) => c);
   const feiraos = DB.feiraos().filter(f=>
     normStr(f.nomeFeirao).includes(nq)||normStr(f.localEvento).includes(nq)||
     normStr(f.recrutadorNome).includes(nq)||normStr(f.enderecoCompleto||'').includes(nq)
@@ -4141,9 +4301,53 @@ function removeImpRow(rowKey) {
 async function confirmImport() {
   const fid = document.getElementById('imp-feirao').value;
   if(!fid){toast('Selecione um feirao de destino','error');return;}
-  window._opStart('Importando candidatos…');
   const f = DB.feiraos().find(x=>x.id===fid);
   if(!f){toast('Feirão não encontrado','error');return;}
+  const extras = f.recrutadoresExtras || [];
+  if (extras.length > 0) {
+    // Feirão tem mais de um recrutador vinculado — pergunta antes de importar
+    window._impFeirao = f;
+    openModal('modal-imp-tipo');
+    return;
+  }
+  await runImport(f, f.recrutadorId, f.recrutadorNome);
+}
+
+// ═══════════════════════════════════════
+// IMPORTAÇÃO — quando o feirão de destino tem mais de um
+// recrutador vinculado, pergunta se a planilha é conjunta
+// (recrutador principal) ou separada (informar o responsável)
+// ═══════════════════════════════════════
+window._impFeirao = null;
+
+function impTipoConjunta() {
+  closeModal('modal-imp-tipo');
+  const f = window._impFeirao;
+  if (f) runImport(f, f.recrutadorId, f.recrutadorNome);
+}
+
+function impTipoSeparada() {
+  closeModal('modal-imp-tipo');
+  const f = window._impFeirao;
+  if (!f) return;
+  const opts = [{ id: f.recrutadorId, nome: f.recrutadorNome }, ...(f.recrutadoresExtras || [])];
+  const sel = document.getElementById('modal-imp-rec-select');
+  sel.innerHTML = opts.map(o => `<option value="${o.id}" data-nome="${esc(o.nome)}">${esc(o.nome)}</option>`).join('');
+  openModal('modal-imp-rec');
+}
+
+function confirmImportSeparado() {
+  const sel = document.getElementById('modal-imp-rec-select');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) { toast('Selecione o recrutador responsável', 'error'); return; }
+  closeModal('modal-imp-rec');
+  const f = window._impFeirao;
+  if (f) runImport(f, opt.value, opt.getAttribute('data-nome') || opt.textContent);
+}
+
+async function runImport(f, recrutadorId, recrutadorNome) {
+  const fid = f.id;
+  window._opStart('Importando candidatos…');
   // ── Usa o cache direto sem clonar — com 20k candidatos, .slice() desperdiça
   // centenas de ms e muita RAM. Empurramos direto no array do cache.
   const existingCPFs = new Set(window._cache.candidatos.map(c=>normCPF(c.cpf)));
@@ -4165,7 +4369,7 @@ async function confirmImport() {
     const c = {
       id:uid(), feiraoId:fid, feiraoNome:f.nomeFeirao, feiraoLocal:f.localEvento,
       ...dados,
-      recrutadorId:f.recrutadorId, recrutadorNome:f.recrutadorNome,
+      recrutadorId, recrutadorNome,
     };
     applyRuleEngine(c);
     cands.push(c);
@@ -4343,6 +4547,64 @@ function exportCandidatosExcel() {
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
   XLSX.writeFile(wb,`candidatos_gps_${today()}.xlsx`);
   toast('Excel exportado!','success');
+}
+
+// ═══════════════════════════════════════
+// EXPORT / COMPARTILHAMENTO — pergunta se a planilha é
+// conjunta ou separada por recrutador antes de gerar o arquivo
+// ═══════════════════════════════════════
+window._expGrupos = [];
+
+function promptExportCandidatos() {
+  const cands = getFilteredCandidatos();
+  if(!cands.length){ toast('Nenhum candidato para exportar','error'); return; }
+  openModal('modal-exp-tipo');
+}
+
+function expTipoConjunta() {
+  closeModal('modal-exp-tipo');
+  exportCandidatosExcel();
+}
+
+function expTipoSeparada() {
+  closeModal('modal-exp-tipo');
+  const cands = getFilteredCandidatos();
+  const grupos = {};
+  cands.forEach(c => {
+    const chave = c.recrutadorNome || c.recrutadorId || '';
+    if(!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(c);
+  });
+  const chaves = Object.keys(grupos);
+  window._expGrupos = chaves.map(k => grupos[k]);
+  const body = document.getElementById('modal-exp-rec-body');
+  body.innerHTML = '<p class="text-muted text-sm" style="margin-bottom:12px">Confirme (ou informe) o recrutador responsável por cada grupo. Um arquivo Excel será gerado para cada um.</p>' +
+    chaves.map((k,i) => `
+      <div class="form-group">
+        <label>${esc(k || '(sem recrutador definido)')} — ${grupos[k].length} candidato(s)</label>
+        <input type="text" class="exp-rec-resp" data-idx="${i}" value="${esc(k)}" placeholder="Nome do recrutador responsável"/>
+      </div>`).join('');
+  openModal('modal-exp-rec');
+}
+
+function confirmExportSeparada() {
+  const inputs = document.querySelectorAll('#modal-exp-rec-body .exp-rec-resp');
+  let ok = true;
+  inputs.forEach(inp => { if(!inp.value.trim()) ok = false; });
+  if(!ok) { toast('Informe o recrutador responsável de cada grupo', 'error'); return; }
+  inputs.forEach(inp => {
+    const idx = parseInt(inp.getAttribute('data-idx'), 10);
+    const responsavel = inp.value.trim();
+    const grupo = window._expGrupos[idx] || [];
+    if(!grupo.length) return;
+    const data = grupo.map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':responsavel,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Data Inclusão':fmt(c.dataInclusao)||''}));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
+    const safeName = responsavel.replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').substring(0,40) || 'recrutador';
+    XLSX.writeFile(wb,`candidatos_gps_${safeName}_${today()}.xlsx`);
+  });
+  closeModal('modal-exp-rec');
+  toast(`${inputs.length} planilha(s) exportada(s)!`,'success');
 }
 
 
