@@ -1329,8 +1329,9 @@ thead th {
           <option value="DOCUMENTACAO">📄 Documentação</option>
           <option value="ADMITIDO">✅ Admitido</option>
         </select>
-        <div style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--gray-300);border-radius:8px;overflow:hidden;background:var(--gray-100)">
-          <input id="f-nome-cand" type="text" placeholder="Nome, CPF, Cidade ou Cargo…"
+        <div style="display:inline-flex;flex-direction:column;gap:2px">
+        <div id="f-nome-cand-wrap" style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--gray-300);border-radius:8px;overflow:hidden;background:var(--gray-100);transition:border-color .15s,background .15s">
+          <input id="f-nome-cand" type="text" placeholder="Nome ou CPF…"
             onkeydown="if(event.key==='Enter')renderCandidatos(true)"
             style="min-width:220px;border:none;background:transparent;padding:7px 12px;font-size:.83rem;outline:none;color:var(--gray-900)"/>
           <button onclick="renderCandidatos(true)" title="Pesquisar"
@@ -1338,6 +1339,12 @@ thead th {
             onmouseover="this.style.background='var(--blue-700)'" onmouseout="this.style.background='var(--blue-600)'">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           </button>
+        </div>
+        <label style="display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--gray-500);cursor:pointer;padding-left:2px;white-space:nowrap">
+          <input type="checkbox" id="f-nome-cand-extra" onchange="toggleCandSearchMode()" style="width:12px;height:12px;cursor:pointer;flex-shrink:0"/>
+          <span id="f-nome-cand-extra-label">Pesquisar por Cargo e Cidade</span>
+        </label>
+        </div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
         <input type="hidden" id="f-ant-cand" value=""/>
@@ -3180,10 +3187,27 @@ function _isReprovadoConsolidado(c) {
     || c.recontratacao === 'REPROVADO';
 }
 
+// ── Alterna o modo de pesquisa de candidatos entre "Nome/CPF" e "Cargo/Cidade".
+//    Atualiza placeholder, cor da borda e o texto do rótulo para sinalizar
+//    claramente ao usuário qual modo está ativo, e já dispara a nova busca.
+function toggleCandSearchMode() {
+  const extra = document.getElementById('f-nome-cand-extra')?.checked || false;
+  const input = document.getElementById('f-nome-cand');
+  const wrap  = document.getElementById('f-nome-cand-wrap');
+  const label = document.getElementById('f-nome-cand-extra-label');
+  if (input) input.placeholder = extra ? 'Cargo ou Cidade…' : 'Nome ou CPF…';
+  if (wrap)  wrap.style.borderColor = extra ? 'var(--blue-600)' : 'var(--gray-300)';
+  if (wrap)  wrap.style.background  = extra ? 'var(--blue-50)'  : 'var(--gray-100)';
+  if (label) label.style.color = extra ? 'var(--blue-600)' : 'var(--gray-500)';
+  if (label) label.style.fontWeight = extra ? '700' : '400';
+  renderCandidatos(true);
+}
+
 function getFilteredCandidatos() {
   const cands = DB.candidatos();
   const fid    = document.getElementById('f-feirao-cand')?.value||'';
   const q      = normStr(document.getElementById('f-nome-cand')?.value||'');
+  const qExtra = document.getElementById('f-nome-cand-extra')?.checked||false; // busca também em Cidade/Cargo
   const qr     = document.getElementById('f-rec-cand')?.value||'';
   const qs     = document.getElementById('f-status-cand')?.value||'';
   const qa     = document.getElementById('f-ant-cand')?.value||'';
@@ -3205,11 +3229,18 @@ function getFilteredCandidatos() {
     if (qadm   && (qadm === '1' ? !c.admitido : c.admitido)) return false;
     if (qetapa && c.etapaProcesso !== qetapa) return false;
     if (q) {
-      const nomeOk   = normStr(c.nome).includes(q);
-      const cidadeOk = normStr(c.cidade||c.feiraoLocal||'').includes(q);
-      const cargoOk  = normStr(c.cargo||'').includes(q);
-      const cpfOk    = qHasDigits && (c.cpf||'').replace(/[^0-9]/g,'').includes(qDigits);
-      if (!nomeOk && !cidadeOk && !cargoOk && !cpfOk) return false;
+      if (qExtra) {
+        // Modo "Cargo e Cidade": pesquisa EXCLUSIVAMENTE nesses dois campos,
+        // ignorando Nome/CPF.
+        const cidadeOk = normStr(c.cidade||c.feiraoLocal||'').includes(q);
+        const cargoOk  = normStr(c.cargo||'').includes(q);
+        if (!cidadeOk && !cargoOk) return false;
+      } else {
+        // Modo padrão: pesquisa EXCLUSIVAMENTE em Nome/CPF.
+        const nomeOk = normStr(c.nome).includes(q);
+        const cpfOk  = qHasDigits && (c.cpf||'').replace(/[^0-9]/g,'').includes(qDigits);
+        if (!nomeOk && !cpfOk) return false;
+      }
     }
     return true;
   });
@@ -3314,8 +3345,9 @@ function candGoPage(p) {
 
 function clearCandFilters() {
   document.getElementById('f-nome-cand').value='';
+  document.getElementById('f-nome-cand-extra').checked=false;
   ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand'].forEach(id=>document.getElementById(id).value='');
-  renderCandidatos(true);
+  toggleCandSearchMode(); // reseta placeholder/cor do campo para o modo padrão (Nome/CPF)
 }
 
 function updateBulkBar() {
