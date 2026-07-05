@@ -692,6 +692,29 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef2f8; colo
 .form-group input[readonly], .form-group select[disabled] { background: var(--gray-100); color: var(--gray-500); cursor: not-allowed; }
 .form-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
 
+/* ── ALERTA DE CAMPO OBRIGATÓRIO PENDENTE (ex: motivo da reprovação) ── */
+.field-alert-label { color: var(--red) !important; display: inline-flex; align-items: center; gap: 5px; }
+.field-alert-label .field-alert-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; border-radius: 50%; background: var(--red);
+  color: #fff; font-size: .68rem; font-weight: 800; line-height: 1; flex-shrink: 0;
+  animation: fieldAlertPulse 1.4s ease-in-out infinite;
+}
+.form-group input.field-alert-input {
+  border-color: var(--red) !important; background: var(--red-light);
+  box-shadow: 0 0 0 3px rgba(220,38,38,.12);
+}
+.field-alert-msg { font-size: .74rem; color: var(--red); font-weight: 600; margin: 2px 0 0; display: flex; align-items: center; gap: 4px; }
+@keyframes fieldAlertPulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* ── LINHA DE TABELA SINALIZADA: reprovação sem motivo preenchido ── */
+tr.row-alert { background: var(--red-light) !important; }
+tr.row-alert:hover { background: #fde3e3 !important; }
+tr.row-alert td { border-bottom-color: rgba(220,38,38,.18) !important; }
+tr.row-reprovado { background: rgba(220,38,38,.055) !important; }
+tr.row-reprovado:hover { background: rgba(220,38,38,.1) !important; }
+tr.row-reprovado td { border-bottom-color: rgba(220,38,38,.12) !important; }
+
 /* ── TABLE ── */
 .table-wrap { overflow-x: auto; width: 100%; border-radius: 0 0 16px 16px; overflow-y: visible; scrollbar-width: thin; scrollbar-color: var(--blue-300) var(--gray-100); }
 table { width: 100%; border-collapse: collapse; font-size: .83rem; }
@@ -1230,22 +1253,36 @@ thead th {
         <div class="card" style="padding:0;overflow:hidden">
           <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--gray-100);padding:0 8px 0 4px">
             <div style="display:flex;gap:0;overflow-x:auto">
-              <button class="rank-tab active" data-tab="rec" onclick="switchRankTab('rec',this)" style="padding:10px 15px;font-size:.79rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--blue-500);margin-bottom:-2px;color:var(--blue-700);white-space:nowrap">🏆 Recrutadores</button>
-              <button class="rank-tab" data-tab="cargo" onclick="switchRankTab('cargo',this)" style="padding:10px 15px;font-size:.79rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--gray-500);white-space:nowrap">💼 Por Cargo</button>
+              <button class="rank-tab active" data-tab="cargo" onclick="switchRankTab('cargo',this)" style="padding:10px 15px;font-size:.79rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--blue-500);margin-bottom:-2px;color:var(--blue-700);white-space:nowrap">💼 Por Cargo</button>
               <button class="rank-tab" data-tab="cidade" onclick="switchRankTab('cidade',this)" style="padding:10px 15px;font-size:.79rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--gray-500);white-space:nowrap">📍 Por Cidade</button>
               <button class="rank-tab" data-tab="admitidos" onclick="switchRankTab('admitidos',this)" style="padding:10px 15px;font-size:.79rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--gray-500);white-space:nowrap">✅ Admitidos</button>
               <button class="rank-tab" data-tab="cr" onclick="switchRankTab('cr',this)" style="padding:10px 15px;font-size:.79rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--gray-500);white-space:nowrap">🎯 Por CR</button>
+              <button class="rank-tab" data-tab="rec" onclick="switchRankTab('rec',this)" style="padding:10px 15px;font-size:.79rem;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--gray-500);white-space:nowrap">👤 Recrutadores</button>
             </div>
-            <button class="btn btn-secondary btn-sm" title="Gerenciar recrutadores" onclick="openRecListModal()" style="flex-shrink:0;padding:4px 8px;display:flex;align-items:center;gap:4px;margin-left:8px">
-              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            </button>
           </div>
           <div style="padding:12px 16px;max-height:340px;overflow-y:auto">
-            <div id="rank-panel-rec"><div id="an-rec-list"></div></div>
-            <div id="rank-panel-cargo" style="display:none"><div id="dash-rank-cargo"></div></div>
+            <div id="rank-panel-cargo"><div id="dash-rank-cargo"></div></div>
             <div id="rank-panel-cidade" style="display:none"><div id="dash-rank-cidade"></div></div>
             <div id="rank-panel-admitidos" style="display:none"><div id="dash-rank-admitidos"></div></div>
             <div id="rank-panel-cr" style="display:none"><div id="dash-rank-cr"></div></div>
+            <div id="rank-panel-rec" style="display:none">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+                <p class="text-muted text-sm" id="rec-count-label" style="margin:0"></p>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <input id="f-rec-nome" type="text" placeholder="Buscar recrutador…" oninput="renderRecrutadores()" style="min-width:180px;border:1px solid var(--gray-300);border-radius:8px;padding:6px 10px;font-size:.8rem"/>
+                  <button class="btn btn-primary btn-sm" onclick="openRecModal()">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Novo Recrutador
+                  </button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Nome</th><th>Feirões</th><th>Total Candidatos</th><th>Aprovados</th><th>Taxa Aprovação</th><th>Ações</th></tr></thead>
+                  <tbody id="rec-tbody"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1316,12 +1353,43 @@ thead th {
         <select id="f-rec-cand" onchange="renderCandidatos(true)">
           <option value="">Todos os Recrutadores</option>
         </select>
-        <select id="f-status-cand" onchange="renderCandidatos(true)">
-          <option value="">Status</option>
-          <option value="APROVADO">✅ Aprovado</option>
-          <option value="REPROVADO">❌ Reprovado</option>
-          <option value="EM_ANALISE">Em Análise</option>
-        </select>
+        <div style="position:relative;display:inline-block">
+          <button id="f-status-group-btn" onclick="toggleStatusFilterMenu(event)" title="Filtrar por Status, Antecedentes e Ex-Colaborador"
+            style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--gray-300);border-radius:8px;background:var(--white);cursor:pointer;font-size:.83rem;color:var(--gray-700)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Status / Antecedentes / Ex-Colaborador
+            <span id="f-status-group-badge" style="display:none;background:var(--blue-600);color:#fff;font-size:.68rem;font-weight:700;border-radius:999px;padding:1px 6px;min-width:16px;text-align:center"></span>
+            <span style="font-size:.7rem;color:var(--gray-400)">▾</span>
+          </button>
+          <div id="f-status-group-menu" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:230px;padding:12px;margin-top:4px;display:flex;flex-direction:column;gap:10px">
+            <div>
+              <label style="font-size:.72rem;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px">Status</label>
+              <select id="f-status-cand" onchange="renderCandidatos(true);updateStatusFilterBadge()" style="width:100%">
+                <option value="">Todos</option>
+                <option value="APROVADO">✅ Aprovado</option>
+                <option value="REPROVADO">❌ Reprovado</option>
+                <option value="EM_ANALISE">Em Análise</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:.72rem;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px">Antecedentes</label>
+              <select id="f-ant-cand" onchange="renderCandidatos(true);updateStatusFilterBadge()" style="width:100%">
+                <option value="">Todos</option>
+                <option value="APROVADO">✅ Aprovado</option>
+                <option value="REPROVADO">❌ Reprovado</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:.72rem;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px">Ex-Colaborador</label>
+              <select id="f-recont-cand" onchange="renderCandidatos(true);updateStatusFilterBadge()" style="width:100%">
+                <option value="">Todos</option>
+                <option value="NUNCA_TRABALHOU_NA_GPS">Nunca GPS</option>
+                <option value="APROVADO">✅ Aprovado</option>
+                <option value="REPROVADO">❌ Reprovado</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <select id="f-etapa-cand" onchange="renderCandidatos(true)">
           <option value="">Etapa</option>
           <option value="CAPTACAO">🎯 Captação</option>
@@ -1329,7 +1397,11 @@ thead th {
           <option value="DOCUMENTACAO">📄 Documentação</option>
           <option value="ADMITIDO">✅ Admitido</option>
         </select>
-        <div style="display:inline-flex;flex-direction:column;gap:3px">
+        <label title="Mostra candidatos com reprovação em Status, Antecedentes ou Ex-Colaborador sem motivo preenchido, e/ou sem a Etapa do Processo preenchida" style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--red);font-weight:600;cursor:pointer;user-select:none;border:1px solid #fca5a5;background:var(--red-light);border-radius:8px;padding:0 12px;height:34px">
+          <input id="f-motivo-pendente" type="checkbox" onchange="renderCandidatos(true)" style="cursor:pointer;width:13px;height:13px;margin:0;accent-color:var(--red)"/>
+          ⚠ Pendentes (motivo/etapa)
+        </label>
+        <div style="display:flex;flex-direction:column;gap:4px">
           <div style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--gray-300);border-radius:8px;overflow:hidden;background:var(--gray-100)">
             <input id="f-nome-cand" type="text" placeholder="Nome ou CPF…"
               onkeydown="if(event.key==='Enter')renderCandidatos(true)"
@@ -1340,14 +1412,12 @@ thead th {
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             </button>
           </div>
-          <label style="display:flex;align-items:center;gap:5px;font-size:.74rem;color:var(--gray-600);cursor:pointer;user-select:none;padding-left:2px">
-            <input id="f-modo-cidade-cargo" type="checkbox" onchange="onToggleModoCandBusca(this)" style="cursor:pointer;width:12px;height:12px"/>
+          <label style="display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--gray-600);cursor:pointer;user-select:none;padding-left:2px">
+            <input id="f-nome-cidade-cargo" type="checkbox" onchange="renderCandidatos(true)" style="cursor:pointer;width:12px;height:12px;margin:0"/>
             Buscar também em Cidade e Cargo
           </label>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="clearCandFilters()">Limpar</button>
-        <input type="hidden" id="f-ant-cand" value=""/>
-        <input type="hidden" id="f-recont-cand" value=""/>
         <input type="hidden" id="f-admitido-cand" value=""/>
       </div>
       <div class="card">
@@ -1409,6 +1479,10 @@ thead th {
           <button class="btn btn-secondary btn-sm" onclick="exportFeiraosExcel()">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Excel
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="openCalPdfModal()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            PDF
           </button>
           <button class="btn btn-primary btn-sm" onclick="openFeiraModal()">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1562,6 +1636,24 @@ thead th {
         <div class="card">
           <div class="card-header"><span class="card-title">Configuração da Importação</span></div>
           <div class="card-body">
+            <div class="form-group" style="margin-bottom:14px">
+              <label>Filtrar feirões</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <select id="imp-filtro-status" onchange="populateImpFeiraoSelect()" style="border:1px solid var(--gray-300);border-radius:8px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--gray-700)">
+                  <option value="">Todos os Status</option>
+                  <option value="ABERTO">Aberto</option>
+                  <option value="ENCERRADO">Encerrado</option>
+                </select>
+                <select id="imp-filtro-mes" onchange="populateImpFeiraoSelect()" style="border:1px solid var(--gray-300);border-radius:8px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--gray-700)">
+                  <option value="">Todos os Meses</option>
+                  <option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option>
+                  <option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option>
+                  <option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option>
+                  <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+                </select>
+                <input id="imp-filtro-ano" type="number" placeholder="Ano" min="2000" max="2099" oninput="populateImpFeiraoSelect()" style="width:80px;border:1px solid var(--gray-300);border-radius:8px;padding:6px 8px;font-size:.8rem"/>
+              </div>
+            </div>
             <div class="form-group" style="margin-bottom:14px">
               <label>Feirão de destino *</label>
               <select id="imp-feirao">
@@ -1769,6 +1861,11 @@ thead th {
               <option value="EM_ANALISE">Em Análise</option>
             </select>
           </div>
+          <div class="form-group" style="grid-column:1/-1" id="mc-motivo-wrap">
+            <label id="mc-motivo-label">Motivo da Reprovação</label>
+            <input id="mc-motivo" type="text" placeholder="Descreva o motivo…" oninput="toggleMotivoField()"/>
+            <p class="field-alert-msg" id="mc-motivo-alert-msg" style="display:none">⚠ Preenchimento obrigatório quando há reprovação</p>
+          </div>
         </div>
       </div>
 
@@ -1781,10 +1878,6 @@ thead th {
               <option value="APROVADO">Aprovado</option>
               <option value="REPROVADO">Reprovado</option>
             </select>
-          </div>
-          <div class="form-group" style="grid-column:1/-1" id="mc-motivo-wrap">
-            <label>Motivo da Reprovação</label>
-            <input id="mc-motivo" type="text" placeholder="Descreva o motivo…"/>
           </div>
         </div>
       </div>
@@ -1841,37 +1934,6 @@ thead th {
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-cand')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveCandidato()">Salvar Candidato</button>
-    </div>
-  </div>
-</div>
-
-<!-- RECRUTADOR MODAL -->
-<div class="modal-overlay" id="modal-rec-list">
-  <div class="modal" style="max-width:720px">
-    <div class="modal-header">
-      <span class="modal-title">👤 Gerenciar Recrutadores</span>
-      <button class="modal-close" onclick="closeModal('modal-rec-list')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-        <p class="text-muted text-sm" id="rec-count-label" style="margin:0"></p>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input id="f-rec-nome" type="text" placeholder="Buscar recrutador…" oninput="renderRecrutadores()" style="min-width:200px;border:1px solid var(--gray-300);border-radius:8px;padding:7px 12px;font-size:.83rem"/>
-          <button class="btn btn-primary btn-sm" onclick="openRecModal()">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Novo Recrutador
-          </button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Nome</th><th>Feirões</th><th>Total Candidatos</th><th>Aprovados</th><th>Taxa Aprovação</th><th>Ações</th></tr></thead>
-          <tbody id="rec-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-rec-list')">Fechar</button>
     </div>
   </div>
 </div>
@@ -1977,6 +2039,39 @@ thead th {
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-exp-rec')">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmExportSeparada()">Exportar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDÁRIO: EXPORTAR PDF (TODOS OU MÊS ESPECÍFICO) -->
+<div class="modal-overlay" id="modal-cal-pdf">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">Exportar Calendário em PDF</span>
+      <button class="modal-close" onclick="closeModal('modal-cal-pdf')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Período</label>
+        <select id="cal-pdf-scope" onchange="calPdfToggleMonth()" style="width:100%">
+          <option value="month">Mês específico</option>
+          <option value="all">Todos os períodos</option>
+        </select>
+      </div>
+      <div id="cal-pdf-month-wrap" style="display:flex;gap:8px">
+        <div class="form-group" style="flex:1">
+          <label>Mês</label>
+          <select id="cal-pdf-month" style="width:100%"></select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>Ano</label>
+          <select id="cal-pdf-year" style="width:100%"></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-cal-pdf')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmExportCalendarPdf()">Exportar PDF</button>
     </div>
   </div>
 </div>
@@ -2390,7 +2485,7 @@ function confirm_(msg, fn) {
 // ═══════════════════════════════════════
 function populateFeiraoSelects() {
   const feiraos = DB.feiraos();
-  const ids = ['f-feirao-cand','an-feirao','imp-feirao','mc-feirao','mev-feirao-link'];
+  const ids = ['f-feirao-cand','an-feirao','mc-feirao','mev-feirao-link'];
   ids.forEach(id => {
     const sel = document.getElementById(id);
     if(!sel) return;
@@ -2405,6 +2500,35 @@ function populateFeiraoSelects() {
     });
     if(val) sel.value = val;
   });
+  populateImpFeiraoSelect();
+}
+
+// ── Popula o select "Feirão de destino" da tela de Importação, respeitando
+//    os filtros de Status (Aberto/Encerrado) e Mês/Ano do evento, para
+//    facilitar achar o feirão certo quando há muitos cadastrados.
+function populateImpFeiraoSelect() {
+  const sel = document.getElementById('imp-feirao');
+  if(!sel) return;
+  const qs  = document.getElementById('imp-filtro-status')?.value||'';
+  const qm  = document.getElementById('imp-filtro-mes')?.value||'';
+  const qa  = document.getElementById('imp-filtro-ano')?.value||'';
+  const val = sel.value;
+  const feiraos = DB.feiraos().filter(f => {
+    if(qs && f.statusFeirao !== qs) return false;
+    if(qm && (f.dataEvento||'').slice(5,7) !== qm) return false;
+    if(qa && (f.dataEvento||'').slice(0,4) !== String(qa)) return false;
+    return true;
+  });
+  sel.innerHTML = '';
+  const first = document.createElement('option');
+  first.value = ''; first.textContent = 'Selecione um feirão…';
+  sel.appendChild(first);
+  feiraos.forEach(f => {
+    const o = document.createElement('option');
+    o.value = f.id; o.textContent = f.nomeFeirao;
+    sel.appendChild(o);
+  });
+  if(val && feiraos.some(f=>f.id===val)) sel.value = val;
 }
 
 function populateAnRecSelect() {
@@ -2531,6 +2655,9 @@ document.addEventListener('click', e => {
   const selMenu = document.getElementById('cand-sel-menu');
   const arrow = document.getElementById('cand-sel-arrow');
   if(selMenu && !selMenu.contains(e.target) && e.target !== arrow) selMenu.style.display = 'none';
+  const statusMenu = document.getElementById('f-status-group-menu');
+  const statusBtn = document.getElementById('f-status-group-btn');
+  if(statusMenu && !statusMenu.contains(e.target) && !statusBtn?.contains(e.target)) statusMenu.style.display = 'none';
   document.querySelectorAll('.autocomplete-list').forEach(l => {
     if(!l.parentElement.contains(e.target)) l.style.display='none';
   });
@@ -2778,6 +2905,7 @@ async function saveFeirao() {
     } else {
       toast('Feirão criado!','success');
     }
+    window._opEnd();
     closeModal('modal-feirao');
     renderFeiraos();
     return;
@@ -3022,7 +3150,21 @@ function toggleMotivoField() {
   const ant = document.getElementById('mc-ant').value;
   const recont = document.getElementById('mc-recont').value;
   const wrap = document.getElementById('mc-motivo-wrap');
-  wrap.style.display = (status==='REPROVADO'||ant==='REPROVADO') ? 'flex' : 'none';
+  const motivoObrigatorio = (status==='REPROVADO'||ant==='REPROVADO'||recont==='REPROVADO');
+  wrap.style.display = motivoObrigatorio ? 'flex' : 'none';
+
+  // Sinaliza visualmente (borda vermelha + ícone) quando o motivo é
+  // obrigatório (houve reprovação) e ainda não foi preenchido.
+  const input = document.getElementById('mc-motivo');
+  const label = document.getElementById('mc-motivo-label');
+  const alertMsg = document.getElementById('mc-motivo-alert-msg');
+  const pendente = motivoObrigatorio && !input.value.trim();
+  input.classList.toggle('field-alert-input', pendente);
+  label.classList.toggle('field-alert-label', pendente);
+  label.innerHTML = pendente
+    ? '<span class="field-alert-icon">!</span> Motivo da Reprovação *'
+    : 'Motivo da Reprovação' + (motivoObrigatorio ? ' *' : '');
+  alertMsg.style.display = pendente ? 'flex' : 'none';
 
   const temReprovacao = status==='REPROVADO' || ant==='REPROVADO' || recont==='REPROVADO';
   // Lógica de Banco de Talentos removida
@@ -3088,6 +3230,8 @@ async function saveCandidato() {
   if(!status){toast('Status do processo é obrigatório','error');return;}
   if(!ant){toast('Antecedentes é obrigatório','error');return;}
   if(!recont){toast('Pesquisa de Ex-Colaborador é obrigatória','error');return;}
+  // Motivo da reprovação não bloqueia mais o salvamento — apenas fica
+  // sinalizado visualmente (campo em vermelho + linha vermelha na listagem).
   // Aviso apenas, sem bloquear
   const f = DB.feiraos().find(x=>x.id===fid);
   if(!f){toast('Feirão não encontrado','error');return;}
@@ -3115,8 +3259,17 @@ async function saveCandidato() {
     window._opEnd();
   }
   closeModal('modal-cand');
-  if(ant==='REPROVADO' || recont==='REPROVADO') {
-    setTimeout(() => toast('⚠ Atenção: candidato possui reprovação em antecedentes ou ex-colaborador.','info'), 400);
+  if(status==='REPROVADO' || ant==='REPROVADO' || recont==='REPROVADO') {
+    const camposReprovados = [
+      status==='REPROVADO' ? 'Status' : null,
+      ant==='REPROVADO' ? 'Antecedentes' : null,
+      recont==='REPROVADO' ? 'Ex-Colaborador' : null,
+    ].filter(Boolean).join(', ');
+    if(!motivo) {
+      setTimeout(() => toast(`⚠ Reprovação em ${camposReprovados} sem motivo preenchido. Este candidato ficará marcado em "Pendentes".`,'info'), 400);
+    } else {
+      setTimeout(() => toast(`⚠ Atenção: candidato possui reprovação em ${camposReprovados}.`,'info'), 400);
+    }
   }
   renderCandidatos();
 }
@@ -3186,28 +3339,42 @@ function _isReprovadoConsolidado(c) {
     || c.recontratacao === 'REPROVADO';
 }
 
-function onToggleModoCandBusca(el) {
-  const input = document.getElementById('f-nome-cand');
-  if (input) input.placeholder = el.checked ? 'Cidade ou Cargo…' : 'Nome ou CPF…';
-  renderCandidatos(true);
+// ── Candidato com alguma reprovação (status/antecedentes/recontratação)
+//    mas sem o motivo preenchido — usado para sinalizar a linha em vermelho
+//    nas listagens (útil sobretudo após importações em massa via planilha).
+function _motivoReprovacaoPendente(c) {
+  return _isReprovadoConsolidado(c) && !String(c.motivoReprovacao||'').trim();
+}
+
+// ── Candidato sem a Etapa do Processo preenchida. Entra no filtro de
+//    "Pendentes", mas NÃO deixa a linha vermelha (diferente do motivo de
+//    reprovação pendente acima).
+function _etapaPendente(c) {
+  return !String(c.etapaProcesso||'').trim();
+}
+
+// ── Usado só pelo filtro "⚠ Pendentes": qualquer um dos dois casos acima.
+function _temPendencia(c) {
+  return _motivoReprovacaoPendente(c) || _etapaPendente(c);
 }
 
 function getFilteredCandidatos() {
   const cands = DB.candidatos();
   const fid    = document.getElementById('f-feirao-cand')?.value||'';
   const q      = normStr(document.getElementById('f-nome-cand')?.value||'');
-  const qModoCidadeCargo = document.getElementById('f-modo-cidade-cargo')?.checked||false;
   const qr     = document.getElementById('f-rec-cand')?.value||'';
   const qs     = document.getElementById('f-status-cand')?.value||'';
   const qa     = document.getElementById('f-ant-cand')?.value||'';
   const qrecont= document.getElementById('f-recont-cand')?.value||'';
   const qadm   = document.getElementById('f-admitido-cand')?.value||'';
   const qetapa = document.getElementById('f-etapa-cand')?.value||'';
+  const qPendente = document.getElementById('f-motivo-pendente')?.checked || false;
   const qDigits = q ? q.replace(/[^0-9]/g,'') : '';
   const qHasDigits = /[0-9]/.test(q);
+  const qCidadeCargo = document.getElementById('f-nome-cidade-cargo')?.checked || false;
 
   // Sem nenhum filtro ativo: retorna tudo sem iterar
-  if (!fid && !q && !qr && !qs && !qa && !qrecont && !qadm && !qetapa) return cands;
+  if (!fid && !q && !qr && !qs && !qa && !qrecont && !qadm && !qetapa && !qPendente) return cands;
 
   return cands.filter(c => {
     if (fid    && c.feiraoId !== fid) return false;
@@ -3217,16 +3384,15 @@ function getFilteredCandidatos() {
     if (qrecont&& c.recontratacao !== qrecont) return false;
     if (qadm   && (qadm === '1' ? !c.admitido : c.admitido)) return false;
     if (qetapa && c.etapaProcesso !== qetapa) return false;
+    if (qPendente && !_temPendencia(c)) return false;
     if (q) {
-      if (qModoCidadeCargo) {
-        const cidadeOk = normStr(c.cidade||c.feiraoLocal||'').includes(q);
-        const cargoOk  = normStr(c.cargo||'').includes(q);
-        if (!cidadeOk && !cargoOk) return false;
-      } else {
-        const nomeOk = normStr(c.nome).includes(q);
-        const cpfOk  = qHasDigits && (c.cpf||'').replace(/[^0-9]/g,'').includes(qDigits);
-        if (!nomeOk && !cpfOk) return false;
-      }
+      // Nome e CPF sempre pesquisados
+      const nomeOk   = normStr(c.nome).includes(q);
+      const cpfOk    = qHasDigits && (c.cpf||'').replace(/[^0-9]/g,'').includes(qDigits);
+      // Cidade e Cargo só entram na busca se o checkbox estiver marcado
+      const cidadeOk = qCidadeCargo && normStr(c.cidade||c.feiraoLocal||'').includes(q);
+      const cargoOk  = qCidadeCargo && normStr(c.cargo||'').includes(q);
+      if (!nomeOk && !cidadeOk && !cargoOk && !cpfOk) return false;
     }
     return true;
   });
@@ -3249,9 +3415,17 @@ function renderCandidatos(resetPage=false) {
 
   const tbody = document.getElementById('candidatos-tbody');
   if(!page.length){tbody.innerHTML=`<tr><td colspan="14" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();renderCandPagination(0,1,1);return;}
-  tbody.innerHTML = page.map(c => `<tr>
+  tbody.innerHTML = page.map(c => {
+    const pendente = _motivoReprovacaoPendente(c);
+    const reprovado = _isReprovadoConsolidado(c);
+    const rowClass = pendente ? 'row-alert' : (reprovado ? 'row-reprovado' : '');
+    const rowTitle = pendente
+      ? 'Reprovação sem motivo preenchido'
+      : (reprovado ? 'Candidato com reprovação em Status, Antecedentes ou Ex-Colaborador' : '');
+    const icone = pendente ? '⚠ ' : (reprovado ? '❗ ' : '');
+    return `<tr${rowClass ? ` class="${rowClass}" title="${rowTitle}"` : ''}>
     <td style="width:32px"><input type="checkbox" class="cand-chk" data-id="${c.id}" onclick="updateBulkBar()" style="cursor:pointer;width:14px;height:14px"/></td>
-    <td style="min-width:160px;max-width:200px;overflow:hidden;text-overflow:ellipsis"><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')" title="${esc(c.nome)}">${esc(c.nome)}</strong></td>
+    <td style="min-width:160px;max-width:200px;overflow:hidden;text-overflow:ellipsis"><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')" title="${esc(c.nome)}">${icone}${esc(c.nome)}</strong></td>
     <td style="min-width:110px">${esc(c.cpf)}</td>
     <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.cargo||'')}">${esc(c.cargo)||'—'}</td>
     <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.cidade||c.feiraoLocal||'')}">${esc(c.cidade||c.feiraoLocal||'—')}</td>
@@ -3269,7 +3443,8 @@ function renderCandidatos(resetPage=false) {
         <button class="btn btn-danger btn-sm" onclick="deleteCandidato('${c.id}')" title="Excluir" style="padding:3px 8px">✕</button>
       </div>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   updateBulkBar();
   renderCandPagination(total, _candPage, totalPages);
   }; // fim _doRenderCands
@@ -3331,10 +3506,12 @@ function candGoPage(p) {
 
 function clearCandFilters() {
   document.getElementById('f-nome-cand').value='';
-  const chkModo = document.getElementById('f-modo-cidade-cargo');
-  if (chkModo) { chkModo.checked = false; }
-  document.getElementById('f-nome-cand').placeholder = 'Nome ou CPF…';
+  const ccEl = document.getElementById('f-nome-cidade-cargo');
+  if (ccEl) ccEl.checked = false;
+  const pendEl = document.getElementById('f-motivo-pendente');
+  if (pendEl) pendEl.checked = false;
   ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand'].forEach(id=>document.getElementById(id).value='');
+  updateStatusFilterBadge();
   renderCandidatos(true);
 }
 
@@ -3388,6 +3565,20 @@ function toggleSelMenu(e) {
   if(selPageCount) selPageCount.textContent = pageCount;
   if(selAllCount)  selAllCount.textContent  = filtered;
   menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleStatusFilterMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('f-status-group-menu');
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+}
+
+function updateStatusFilterBadge() {
+  const badge = document.getElementById('f-status-group-badge');
+  if(!badge) return;
+  const n = ['f-status-cand','f-ant-cand','f-recont-cand'].filter(id => document.getElementById(id)?.value).length;
+  badge.textContent = n;
+  badge.style.display = n ? 'inline-block' : 'none';
 }
 
 function selectPage() {
@@ -3536,6 +3727,14 @@ async function bulkEditCandidatos() {
     document.getElementById('bulk-admitido-sel').value= '';
     document.getElementById('bulk-etapa-sel').value   = '';
     toast(`${ids.size} candidato(s) atualizados com sucesso!`, 'success');
+    if(novoStatus==='REPROVADO' || novoAnt==='REPROVADO' || novoRecont==='REPROVADO') {
+      const camposReprovados = [
+        novoStatus==='REPROVADO' ? 'Status' : null,
+        novoAnt==='REPROVADO' ? 'Antecedentes' : null,
+        novoRecont==='REPROVADO' ? 'Ex-Colaborador' : null,
+      ].filter(Boolean).join(', ');
+      setTimeout(() => toast(`⚠ Reprovação em massa (${camposReprovados}). Verifique o motivo de cada candidato no filtro "Pendentes".`,'info'), 400);
+    }
   } catch(e) {
     toast('Erro ao salvar: ' + (e.message||'tente novamente'), 'error');
     if(window._initSupabase) await window._initSupabase();
@@ -3550,11 +3749,6 @@ async function bulkEditCandidatos() {
 // RECRUTADORES CRUD
 // ═══════════════════════════════════════
 let editRecId = null;
-function openRecListModal() {
-  renderRecrutadores();
-  openModal('modal-rec-list');
-}
-
 function openRecModal(id=null) {
   editRecId = id;
   document.getElementById('mr-title').textContent = id ? 'Editar Recrutador' : 'Novo Recrutador';
@@ -3568,38 +3762,42 @@ async function saveRecrutador() {
   let all = DB.recrutadores();
   const dup = all.find(r=>normStr(r.nome)===normStr(nome) && r.id!==editRecId);
   if(dup){toast('Recrutador já cadastrado!','error');return;}
-  if(editRecId) {
-    const idx = all.findIndex(x=>x.id===editRecId);
-    const old = all[idx];
-    all[idx] = {...old, nome};
-    let feiraos = DB.feiraos();
-    feiraos = feiraos.map(f=>f.recrutadorId===editRecId?{...f,recrutadorNome:nome}:f);
-    await DB.saveFeiraos(feiraos);
-    const todosCandsRec = DB.candidatos();
-    const candsRecAtual = [];
-    const candsRec = todosCandsRec.map(c => {
-      if(c.recrutadorId !== editRecId) return c;
-      const updated = {...c, recrutadorNome: nome};
-      candsRecAtual.push(updated);
-      return updated;
-    });
-    window._cache.candidatos = candsRec;
-    if (!window._useLocalFallback && window._sbUpsertOnly && candsRecAtual.length) {
-      await window._sbUpsertOnly('candidatos', candsRecAtual);
-    } else if (window._useLocalFallback) {
-      _LS.set('candidatos', candsRec);
-    }
-    toast('Recrutador atualizado!','success');
-  } else {
-    all.push({id:uid(), nome});
-    toast('Recrutador criado!','success');
-  }
   window._opStart('Salvando recrutador…');
   try {
-    await DB.saveRecrutadores(all);
-    populateMfRecSelect(document.getElementById('mf-rec-id')?.value||'');
-    populateAnRecSelect();
-    populateFeiraoSelects();
+    if(editRecId) {
+      const idx = all.findIndex(x=>x.id===editRecId);
+      const old = all[idx];
+      all[idx] = {...old, nome};
+      let feiraos = DB.feiraos();
+      feiraos = feiraos.map(f=>f.recrutadorId===editRecId?{...f,recrutadorNome:nome}:f);
+      await DB.saveFeiraos(feiraos);
+      const todosCandsRec = DB.candidatos();
+      const candsRecAtual = [];
+      const candsRec = todosCandsRec.map(c => {
+        if(c.recrutadorId !== editRecId) return c;
+        const updated = {...c, recrutadorNome: nome};
+        candsRecAtual.push(updated);
+        return updated;
+      });
+      window._cache.candidatos = candsRec;
+      if (!window._useLocalFallback && window._sbUpsertOnly && candsRecAtual.length) {
+        await window._sbUpsertOnly('candidatos', candsRecAtual);
+      } else if (window._useLocalFallback) {
+        _LS.set('candidatos', candsRec);
+      }
+      await DB.saveRecrutadores(all);
+      populateMfRecSelect(document.getElementById('mf-rec-id')?.value||'');
+      populateAnRecSelect();
+      populateFeiraoSelects();
+      toast('Recrutador atualizado!','success');
+    } else {
+      all.push({id:uid(), nome});
+      await DB.saveRecrutadores(all);
+      populateMfRecSelect(document.getElementById('mf-rec-id')?.value||'');
+      populateAnRecSelect();
+      populateFeiraoSelects();
+      toast('Recrutador criado!','success');
+    }
   } catch(e) {
     toast('Erro ao salvar: '+(e.message||'tente novamente'),'error');
   } finally {
@@ -3672,10 +3870,11 @@ function switchRankTab(tab, btn) {
   });
   btn.style.borderBottomColor = 'var(--blue-500)';
   btn.style.color = 'var(--blue-700)';
-  ['rec','cargo','cidade','admitidos','cr'].forEach(t => {
+  ['cargo','cidade','admitidos','cr','rec'].forEach(t => {
     const el = document.getElementById('rank-panel-' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
+  if (tab === 'rec') renderRecrutadores();
 }
 
 function renderDashboard() {
@@ -3753,17 +3952,6 @@ function renderDashboard() {
       <div style="text-align:right;flex-shrink:0">${extra}<div style="font-size:.82rem;font-weight:700;color:var(--gray-800)">${val}</div></div>
     </div>`;
 
-  // Ranking Recrutadores
-  const recCounts={};
-  cands.forEach(c=>{const k=c.recrutadorNome;if(!k)return;recCounts[k]=(recCounts[k]||{total:0,aprov:0});recCounts[k].total++;if(c.statusProcesso==='APROVADO')recCounts[k].aprov++;});
-  const recList=Object.entries(recCounts).sort((a,b)=>b[1].total-a[1].total).slice(0,10);
-  const maxR=recList[0]?.[1]?.total||1;
-  document.getElementById('an-rec-list').innerHTML=recList.length?recList.map(([r,d],i)=>{
-    const tx=d.total?Math.round(d.aprov/d.total*100):0;
-    const txCor=tx>=70?'var(--green)':tx>=40?'#ca8a04':'var(--red)';
-    return _rankRow(i,esc(r),d.total,Math.round(d.total/maxR*100),'var(--blue-500)',`<div style="font-size:.72rem;font-weight:700;color:${txCor};margin-bottom:1px">${tx}%</div>`);
-  }).join(''):'<p class="text-muted text-sm">Nenhum dado</p>';
-
   // Ranking Cargo
   const cargoCounts={};
   cands.forEach(c=>{const k=c.cargo||'Não informado';cargoCounts[k]=(cargoCounts[k]||0)+1;});
@@ -3804,6 +3992,9 @@ function renderDashboard() {
   const taxaAdm=total?Math.round(admitidos/total*100):0;
   const pendentes=cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
   const feiraosAbertos=feiraos.filter(f=>f.statusFeirao==='ABERTO').length;
+  const recCounts={};
+  cands.forEach(c=>{const k=c.recrutadorNome;if(!k)return;recCounts[k]=(recCounts[k]||{total:0,aprov:0});recCounts[k].total++;if(c.statusProcesso==='APROVADO')recCounts[k].aprov++;});
+  const recList=Object.entries(recCounts).sort((a,b)=>b[1].total-a[1].total).slice(0,10);
   const melhorRec=recList[0];
   const melhorCargo=cargoList[0];
   const semCargo=cands.filter(c=>!c.cargo||c.cargo.trim()===''||c.cargo==='Não informado').length;
@@ -3832,8 +4023,9 @@ function renderDashboard() {
     ultimoFeirao?iCard('📅','Último Feirão',esc(ultimoFeirao.nomeFeirao.length>22?ultimoFeirao.nomeFeirao.substring(0,22)+'…':ultimoFeirao.nomeFeirao),fmt(ultimoFeirao.dataEvento)+(ultimoFeirao.localEvento?' · '+esc(ultimoFeirao.localEvento):''),'#c2410c'):'',
   ].filter(Boolean).join('');
 
-  // Refresh recrutadores (caso o modal de gestão esteja aberto)
-  if(document.getElementById('modal-rec-list')?.classList.contains('open')) renderRecrutadores();
+  // Refresh recrutadores (caso a aba de gestão esteja ativa)
+  const _recPanel = document.getElementById('rank-panel-rec');
+  if(_recPanel && _recPanel.style.display !== 'none') renderRecrutadores();
   }; // fim _doRender
   if (window._cache.candidatos.length > 5000) {
     // Volume grande: usa idle callback para não travar a navegação
@@ -3915,31 +4107,11 @@ function doGlobalSearch(q) {
   const dd = document.getElementById('search-results-dropdown');
   if(!q.trim()){dd.style.display='none';return;}
   const nq = normStr(q);
-  // ── Relevância: nome tem prioridade sobre os demais campos, e dentro do nome,
-  // quem começa com o termo (ex: "Paulo Silva") vem antes de quem só contém o
-  // termo no meio (ex: "João Paulo Silva"). Isso evita que candidatos que só
-  // batem por cidade/cargo/recrutador empurrem para fora os que batem pelo nome.
-  function _candScore(c) {
-    const nome = normStr(c.nome);
-    if (nome === nq) return 0;                 // nome exatamente igual
-    if (nome.startsWith(nq)) return 1;          // nome começa com o termo
-    // bate em alguma "palavra" do nome (primeiro, do meio ou último nome)
-    if (nome.split(' ').some(part => part.startsWith(nq))) return 2;
-    if (nome.includes(nq)) return 3;            // termo aparece em qualquer posição do nome
-    if (normStr(c.cpf).includes(nq)) return 4;
-    if (normStr(c.cr||'').includes(nq)) return 5;
-    return 6;                                   // bateu só em cargo/cidade/recrutador/status
-  }
-  const cands = DB.candidatos()
-    .map(c => ({ c, score: _candScore(c) }))
-    .filter(({c, score}) =>
-      score <= 5 ||
-      normStr(c.recrutadorNome).includes(nq)||normStr(c.statusProcesso).includes(nq)||
-      normStr(c.cargo||'').includes(nq)||normStr(c.cidade||c.feiraoLocal||'').includes(nq)
-    )
-    .sort((a,b) => a.score - b.score || normStr(a.c.nome).localeCompare(normStr(b.c.nome)))
-    .slice(0,15)
-    .map(({c}) => c);
+  const cands = DB.candidatos().filter(c=>
+    normStr(c.nome).includes(nq)||normStr(c.cpf).includes(nq)||normStr(c.cr||'').includes(nq)||
+    normStr(c.recrutadorNome).includes(nq)||normStr(c.statusProcesso).includes(nq)||
+    normStr(c.cargo||'').includes(nq)||normStr(c.cidade||c.feiraoLocal||'').includes(nq)
+  ).slice(0,8);
   const feiraos = DB.feiraos().filter(f=>
     normStr(f.nomeFeirao).includes(nq)||normStr(f.localEvento).includes(nq)||
     normStr(f.recrutadorNome).includes(nq)||normStr(f.enderecoCompleto||'').includes(nq)
@@ -4561,8 +4733,174 @@ function exportFeiraosExcel() {
   toast('Excel exportado!','success');
 }
 
+// ═══════════════════════════════════════
+// CALENDÁRIO: EXPORTAR PDF (TODOS OU MÊS ESPECÍFICO)
+// ═══════════════════════════════════════
+function openCalPdfModal() {
+  const monthSel = document.getElementById('cal-pdf-month');
+  const yearSel = document.getElementById('cal-pdf-year');
+  if(!monthSel.options.length) {
+    monthSel.innerHTML = MESES.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+  }
+  if(!yearSel.options.length) {
+    const curY = new Date().getFullYear();
+    const years = [];
+    for(let y = curY - 3; y <= curY + 3; y++) years.push(y);
+    yearSel.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  }
+  monthSel.value = calMonth;
+  yearSel.value = calYear;
+  document.getElementById('cal-pdf-scope').value = 'month';
+  calPdfToggleMonth();
+  openModal('modal-cal-pdf');
+}
+
+function calPdfToggleMonth() {
+  const scope = document.getElementById('cal-pdf-scope').value;
+  document.getElementById('cal-pdf-month-wrap').style.display = scope === 'month' ? 'flex' : 'none';
+}
+
+function confirmExportCalendarPdf() {
+  const scope = document.getElementById('cal-pdf-scope').value;
+  let month = null, year = null;
+  if(scope === 'month') {
+    month = parseInt(document.getElementById('cal-pdf-month').value, 10);
+    year = parseInt(document.getElementById('cal-pdf-year').value, 10);
+  }
+  closeModal('modal-cal-pdf');
+  exportCalendarPDF(scope, month, year);
+}
+
+function exportCalendarPDF(scope, month, year) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const cdsAll = DB.candidatos();
+  const pad2 = n => String(n).padStart(2,'0');
+
+  const PAGE_W = 297, MARGIN_X = 14, CONTENT_W = 269, BOTTOM_LIMIT = 188;
+
+  let feiraosList = DB.feiraos().slice().sort((a,b)=>String(a.dataEvento||'').localeCompare(String(b.dataEvento||'')));
+  let eventosList;
+  let periodoLabel;
+
+  if(scope === 'all') {
+    periodoLabel = 'Todos os Períodos';
+    eventosList = DB.eventos().slice().sort((a,b)=>String(a.dataIni||'').localeCompare(String(b.dataIni||'')));
+  } else {
+    periodoLabel = `${MESES[month]} ${year}`;
+    const rangeStart = `${year}-${pad2(month+1)}-01`;
+    const lastDay = new Date(year, month+1, 0).getDate();
+    const rangeEnd = `${year}-${pad2(month+1)}-${pad2(lastDay)}`;
+    feiraosList = feiraosList.filter(f => String(f.dataEvento||'') >= rangeStart && String(f.dataEvento||'') <= rangeEnd);
+    eventosList = getAllExpandedEvents(rangeStart, rangeEnd)
+      .filter(e => e.dataIni >= rangeStart && e.dataIni <= rangeEnd)
+      .sort((a,b)=>a.dataIni.localeCompare(b.dataIni));
+  }
+
+  // Cabeçalho azul-marinho — redesenhado em TODA página (inclusive nas de continuação)
+  function drawPageHeader() {
+    doc.setFillColor(10,22,40); doc.rect(0,0,PAGE_W,20,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(14); doc.setFont(undefined,'bold');
+    doc.text('GRUPO GPS – Calendário & Feirões', MARGIN_X, 13);
+    doc.setFontSize(8); doc.setFont(undefined,'normal');
+    doc.text(`Período: ${periodoLabel} | Gerado em ${new Date().toLocaleDateString('pt-BR')}`, PAGE_W - MARGIN_X, 13, { align: 'right' });
+    doc.setTextColor(0,0,0);
+  }
+
+  // Título de seção com um marcador colorido no lugar do emoji (evita caracteres corrompidos)
+  function drawSectionTitle(label, y) {
+    doc.setFillColor(37,99,235); doc.rect(MARGIN_X, y-4, 3.2, 4.6, 'F');
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(15,35,70);
+    doc.text(label, MARGIN_X + 6, y);
+    doc.setTextColor(0,0,0);
+  }
+
+  // Cabeçalho de colunas — chamado de novo a cada quebra de página, para nunca deixar
+  // uma linha "órfã" sem saber a quais colunas ela pertence
+  function drawTableHeader(headers, colW, y) {
+    doc.setFillColor(219,234,254); doc.rect(MARGIN_X, y-5, CONTENT_W, 8, 'F');
+    doc.setFontSize(8); doc.setFont(undefined,'bold'); doc.setTextColor(30,58,138);
+    let x = MARGIN_X;
+    headers.forEach((h,i) => { doc.text(h, x+2, y); x += colW[i]; });
+    doc.setTextColor(0,0,0); doc.setFont(undefined,'normal');
+    return y + 6;
+  }
+
+  // ── Unifica Feirões + Eventos em uma única listagem ──
+  // Cada evento vinculado a um feirão (feiraoLink) herda os dados do feirão
+  // (Status, Cand., Adm.). Eventos sem feirão vinculado exibem '—' nessas colunas.
+  // Feirões que por algum motivo não tenham evento correspondente são
+  // acrescentados ao final para não perder informação.
+  const feiraosPorId = {};
+  feiraosList.forEach(f => { feiraosPorId[f.id] = f; });
+
+  const linhasUnificadas = eventosList.map(e => {
+    const f = e.feiraoLink ? feiraosPorId[e.feiraoLink] : null;
+    const cfg = TIPO_CONFIG[e.tipo] || TIPO_CONFIG.outro;
+    const titulo = (e.titulo||'') + (e.recorrente ? ' (recorrente)' : '');
+    const cds = f ? cdsAll.filter(c=>c.feiraoId===f.id) : [];
+    // Ignora textos de preenchimento automático (gerados quando o feirão/evento
+    // é criado sem observação própria), para a coluna Observação ficar em branco
+    const AUTO_OBS = ['Feirão criado automaticamente via módulo Feirões', 'Feirão criado automaticamente via Calendário'];
+    const obsCandidata = e.descricao || (f ? f.observacoes : '') || '';
+    return {
+      data: e.dataIni, titulo, tipo: cfg.label,
+      local: e.local || (f ? f.localEvento : '') || '',
+      resp: e.responsavel || (f ? f.recrutadorNome : '') || '',
+      status: f ? (f.statusFeirao||'') : '—',
+      cand: f ? String(cds.length) : '—',
+      adm: f ? String(cds.filter(c=>c.admitido).length) : '—',
+      obs: AUTO_OBS.includes(obsCandidata) ? '' : obsCandidata,
+      feiraoId: f ? f.id : null
+    };
+  });
+
+  const idsComEvento = new Set(linhasUnificadas.filter(l=>l.feiraoId).map(l=>l.feiraoId));
+  feiraosList.filter(f => !idsComEvento.has(f.id)).forEach(f => {
+    const cds = cdsAll.filter(c=>c.feiraoId===f.id);
+    const AUTO_OBS = ['Feirão criado automaticamente via módulo Feirões', 'Feirão criado automaticamente via Calendário'];
+    linhasUnificadas.push({
+      data: f.dataEvento, titulo: f.nomeFeirao||'', tipo: 'Feirão',
+      local: f.localEvento||'', resp: f.recrutadorNome||'', status: f.statusFeirao||'',
+      cand: String(cds.length), adm: String(cds.filter(c=>c.admitido).length),
+      obs: AUTO_OBS.includes(f.observacoes) ? '' : (f.observacoes||''), feiraoId: f.id
+    });
+  });
+
+  linhasUnificadas.sort((a,b)=>String(a.data||'').localeCompare(String(b.data||'')));
+
+  drawPageHeader();
+  let y = 32;
+  drawSectionTitle(`Feirões & Eventos (${linhasUnificadas.length})`, y);
+  y += 8;
+
+  if(!linhasUnificadas.length) {
+    doc.setFontSize(9); doc.setFont(undefined,'normal');
+    doc.text('Nenhum feirão ou evento encontrado no período selecionado.', MARGIN_X, y);
+  } else {
+    const headers = ['Data','Título','Tipo','Local','Responsável','Status','Cand.','Adm.','Observação'];
+    const colW = [20,60,24,50,40,24,15,12,24];
+    y = drawTableHeader(headers, colW, y);
+    linhasUnificadas.forEach((l,li) => {
+      if(y > BOTTOM_LIMIT) {
+        doc.addPage(); drawPageHeader(); y = 32;
+        drawSectionTitle('Feirões & Eventos (continuação)', y); y += 8;
+        y = drawTableHeader(headers, colW, y);
+      }
+      const row = [fmt(l.data), l.titulo, l.tipo, l.local, l.resp, l.status, l.cand, l.adm, l.obs];
+      if(li%2===0){ doc.setFillColor(239,246,255); doc.rect(MARGIN_X,y-4,CONTENT_W,6,'F'); }
+      let x=MARGIN_X; row.forEach((v,i)=>{ doc.text(String(v).substring(0,colW[i]/2+4), x+2, y); x+=colW[i]; });
+      y+=7;
+    });
+  }
+
+  const slug = scope === 'all' ? 'todos' : `${MESES_SHORT[month].toLowerCase()}_${year}`;
+  doc.save(`calendario_gps_${slug}_${today()}.pdf`);
+  toast('PDF do calendário gerado!','success');
+}
+
 function exportCandidatosExcel() {
-  const data = getFilteredCandidatos().map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':c.recrutadorNome,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Data Inclusão':fmt(c.dataInclusao)||''}));
+  const data = getFilteredCandidatos().map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':c.recrutadorNome,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'⚠ Motivo Pendente':_motivoReprovacaoPendente(c)?'SIM':'','Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Data Inclusão':fmt(c.dataInclusao)||''}));
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
   XLSX.writeFile(wb,`candidatos_gps_${today()}.xlsx`);
@@ -4617,7 +4955,7 @@ function confirmExportSeparada() {
     const responsavel = inp.value.trim();
     const grupo = window._expGrupos[idx] || [];
     if(!grupo.length) return;
-    const data = grupo.map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':responsavel,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Data Inclusão':fmt(c.dataInclusao)||''}));
+    const data = grupo.map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':responsavel,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'⚠ Motivo Pendente':_motivoReprovacaoPendente(c)?'SIM':'','Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Data Inclusão':fmt(c.dataInclusao)||''}));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
     const safeName = responsavel.replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').substring(0,40) || 'recrutador';
@@ -4641,18 +4979,23 @@ function exportCandidatosPDF() {
   doc.setFontSize(8); doc.setFont(undefined,'normal');
   doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} | Total: ${cands.length}`, 230, 13);
   doc.setTextColor(0,0,0);
-  const headers = ['Nome','CPF','CR','Feirão','Recrutador','Status','Antecedentes','BT'];
-  const rows = cands.map(c=>[c.nome,c.cpf,c.cr||'',c.feiraoNome.substring(0,25),c.recrutadorNome,statusLabel(c.statusProcesso),c.antecedentes==='APROVADO'?'APR':'REP','']);
+  const etapaLabelPlain = e => ({CAPTACAO:'Captação',OPERACAO:'Operação',DOCUMENTACAO:'Documentação',ADMITIDO:'Admitido'}[e] || (e || '—'));
+  const headers = ['Nome','CPF','CR','Feirão','Recrutador','Etapa'];
+  const rows = cands.map(c=>[c.nome,c.cpf,c.cr||'',c.feiraoNome.substring(0,25),c.recrutadorNome,etapaLabelPlain(c.etapaProcesso)]);
   let y = 28;
   doc.setFillColor(219,234,254); doc.rect(14,y-5,269,8,'F');
   doc.setFontSize(8); doc.setFont(undefined,'bold');
-  const colW = [50,28,20,55,40,25,25,12];
+  const colW = [55,32,22,65,55,40];
   let x=14; headers.forEach((h,i)=>{doc.text(h,x,y);x+=colW[i];});
   y+=6; doc.setFont(undefined,'normal');
   rows.forEach((r,ri)=>{
     if(y>185){doc.addPage();y=20;}
-    if(ri%2===0){doc.setFillColor(239,246,255);doc.rect(14,y-4,269,6,'F');}
+    const pendente = _motivoReprovacaoPendente(cands[ri]);
+    if(pendente){doc.setFillColor(254,226,226);doc.rect(14,y-4,269,6,'F');}
+    else if(ri%2===0){doc.setFillColor(239,246,255);doc.rect(14,y-4,269,6,'F');}
+    doc.setTextColor(pendente?185:0, pendente?28:0, pendente?28:0);
     x=14; r.forEach((v,i)=>{doc.text(String(v).substring(0,colW[i]/2+2),x,y);x+=colW[i];});
+    doc.setTextColor(0,0,0);
     y+=7;
   });
   doc.save(`candidatos_gps_${today()}.pdf`);
