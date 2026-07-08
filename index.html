@@ -1188,12 +1188,44 @@ thead th {
       </div>
       <!-- Filtros (vindos do Analytics) -->
       <div class="filter-bar" style="margin-bottom:20px">
-        <select id="an-feirao" onchange="renderDashboard()">
-          <option value="">Todos os Feirões</option>
-        </select>
-        <select id="an-rec" onchange="renderDashboard()">
-          <option value="">Todos os Recrutadores</option>
-        </select>
+        <!-- Multi-select de Feirões -->
+        <div class="msel" id="msel-feirao-an" style="position:relative">
+          <button type="button" class="msel-btn" onclick="mselToggle('msel-feirao-an')" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--gray-300);border-radius:8px;background:var(--gray-100);cursor:pointer;font-size:.83rem;color:var(--gray-700)">
+            <span class="msel-label" id="msel-feirao-an-label">Todos os Feirões</span>
+            <span class="msel-badge" id="msel-feirao-an-badge" style="display:none"></span>
+          </button>
+          <div class="msel-panel" id="msel-feirao-an-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);width:240px;max-height:300px;flex-direction:column">
+            <input type="text" class="msel-search-input" placeholder="Filtrar feirões…" oninput="mselFilter('msel-feirao-an', this.value)" style="border:none;border-bottom:1px solid var(--gray-200);padding:8px 10px;font-size:.78rem;outline:none;border-radius:10px 10px 0 0"/>
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;font-size:.78rem;border-bottom:1px solid var(--gray-200);cursor:pointer">
+              <input type="checkbox" id="msel-feirao-an-all" onchange="mselToggleAll('msel-feirao-an', this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:var(--blue-700);flex-shrink:0"/>
+              Selecionar Tudo
+            </label>
+            <div class="msel-list" id="msel-feirao-an-list" style="overflow-y:auto;max-height:190px;padding:4px 0"></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 10px;border-top:1px solid var(--gray-200)">
+              <button type="button" onclick="mselClearAll('msel-feirao-an')" style="border:none;background:none;color:var(--gray-500);font-size:.72rem;cursor:pointer;padding:2px 4px">Limpar</button>
+              <button type="button" onclick="mselToggle('msel-feirao-an')" style="border:none;background:none;color:var(--blue-700);font-size:.72rem;font-weight:700;cursor:pointer;padding:2px 4px">Fechar</button>
+            </div>
+          </div>
+        </div>
+        <!-- Multi-select de Recrutadores -->
+        <div class="msel" id="msel-rec-an" style="position:relative">
+          <button type="button" class="msel-btn" onclick="mselToggle('msel-rec-an')" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--gray-300);border-radius:8px;background:var(--gray-100);cursor:pointer;font-size:.83rem;color:var(--gray-700)">
+            <span class="msel-label" id="msel-rec-an-label">Todos os Recrutadores</span>
+            <span class="msel-badge" id="msel-rec-an-badge" style="display:none"></span>
+          </button>
+          <div class="msel-panel" id="msel-rec-an-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);width:220px;max-height:300px;flex-direction:column">
+            <input type="text" class="msel-search-input" placeholder="Filtrar recrutadores…" oninput="mselFilter('msel-rec-an', this.value)" style="border:none;border-bottom:1px solid var(--gray-200);padding:8px 10px;font-size:.78rem;outline:none;border-radius:10px 10px 0 0"/>
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;font-size:.78rem;border-bottom:1px solid var(--gray-200);cursor:pointer">
+              <input type="checkbox" id="msel-rec-an-all" onchange="mselToggleAll('msel-rec-an', this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:var(--blue-700);flex-shrink:0"/>
+              Selecionar Tudo
+            </label>
+            <div class="msel-list" id="msel-rec-an-list" style="overflow-y:auto;max-height:190px;padding:4px 0"></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 10px;border-top:1px solid var(--gray-200)">
+              <button type="button" onclick="mselClearAll('msel-rec-an')" style="border:none;background:none;color:var(--gray-500);font-size:.72rem;cursor:pointer;padding:2px 4px">Limpar</button>
+              <button type="button" onclick="mselToggle('msel-rec-an')" style="border:none;background:none;color:var(--blue-700);font-size:.72rem;font-weight:700;cursor:pointer;padding:2px 4px">Fechar</button>
+            </div>
+          </div>
+        </div>
         <div style="display:inline-flex;align-items:center;border:1px solid var(--gray-200);border-radius:8px;background:var(--white);overflow:hidden" title="Filtrar por dia / mês / ano de inclusão">
           <select id="an-dia" onchange="renderDashboard()" title="Dia"
             style="font-size:.82rem;padding:6px 4px;border:none;outline:none;color:var(--gray-700);font-family:inherit;background:transparent;cursor:pointer"></select>
@@ -1347,12 +1379,44 @@ thead th {
         </div>
       </div>
       <div class="filter-bar">
-        <select id="f-feirao-cand" onchange="renderCandidatos(true)">
-          <option value="">Todos os Feirões</option>
-        </select>
-        <select id="f-rec-cand" onchange="renderCandidatos(true)">
-          <option value="">Todos os Recrutadores</option>
-        </select>
+        <div class="msel" id="msel-feirao-cand" style="position:relative">
+          <button type="button" class="msel-btn" onclick="mselToggle('msel-feirao-cand')" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--gray-300);border-radius:8px;background:var(--gray-100);cursor:pointer;font-size:.83rem;color:var(--gray-700)">
+            <span class="msel-label" id="msel-feirao-cand-label">Todos os Feirões</span>
+            <span class="msel-badge" id="msel-feirao-cand-badge" style="display:none"></span>
+            <span style="font-size:.7rem;color:var(--gray-400)">▾</span>
+          </button>
+          <div class="msel-panel" id="msel-feirao-cand-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);width:240px;max-height:300px;flex-direction:column">
+            <input type="text" class="msel-search-input" placeholder="Filtrar feirões…" oninput="mselFilter('msel-feirao-cand', this.value)" style="border:none;border-bottom:1px solid var(--gray-200);padding:8px 10px;font-size:.78rem;outline:none;border-radius:10px 10px 0 0"/>
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:.74rem;font-weight:700;color:var(--gray-600);border-bottom:1px solid var(--gray-100);cursor:pointer;background:var(--gray-50)">
+              <input type="checkbox" id="msel-feirao-cand-all" onchange="mselToggleAll('msel-feirao-cand', this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:var(--blue-700);flex-shrink:0"/>
+              Selecionar todos
+            </label>
+            <div class="msel-list" id="msel-feirao-cand-list" style="overflow-y:auto;max-height:190px;padding:4px 0"></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 10px;border-top:1px solid var(--gray-100)">
+              <button type="button" onclick="mselClearAll('msel-feirao-cand')" style="border:none;background:none;color:var(--gray-500);font-size:.72rem;cursor:pointer;padding:2px 4px">Limpar</button>
+              <button type="button" onclick="mselToggle('msel-feirao-cand')" style="border:none;background:none;color:var(--blue-700);font-size:.72rem;font-weight:700;cursor:pointer;padding:2px 4px">Fechar</button>
+            </div>
+          </div>
+        </div>
+        <div class="msel" id="msel-rec-cand" style="position:relative">
+          <button type="button" class="msel-btn" onclick="mselToggle('msel-rec-cand')" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--gray-300);border-radius:8px;background:var(--gray-100);cursor:pointer;font-size:.83rem;color:var(--gray-700)">
+            <span class="msel-label" id="msel-rec-cand-label">Todos os Recrutadores</span>
+            <span class="msel-badge" id="msel-rec-cand-badge" style="display:none"></span>
+            <span style="font-size:.7rem;color:var(--gray-400)">▾</span>
+          </button>
+          <div class="msel-panel" id="msel-rec-cand-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);width:220px;max-height:300px;flex-direction:column">
+            <input type="text" class="msel-search-input" placeholder="Filtrar recrutadores…" oninput="mselFilter('msel-rec-cand', this.value)" style="border:none;border-bottom:1px solid var(--gray-200);padding:8px 10px;font-size:.78rem;outline:none;border-radius:10px 10px 0 0"/>
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:.74rem;font-weight:700;color:var(--gray-600);border-bottom:1px solid var(--gray-100);cursor:pointer;background:var(--gray-50)">
+              <input type="checkbox" id="msel-rec-cand-all" onchange="mselToggleAll('msel-rec-cand', this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:var(--blue-700);flex-shrink:0"/>
+              Selecionar todos
+            </label>
+            <div class="msel-list" id="msel-rec-cand-list" style="overflow-y:auto;max-height:190px;padding:4px 0"></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 10px;border-top:1px solid var(--gray-100)">
+              <button type="button" onclick="mselClearAll('msel-rec-cand')" style="border:none;background:none;color:var(--gray-500);font-size:.72rem;cursor:pointer;padding:2px 4px">Limpar</button>
+              <button type="button" onclick="mselToggle('msel-rec-cand')" style="border:none;background:none;color:var(--blue-700);font-size:.72rem;font-weight:700;cursor:pointer;padding:2px 4px">Fechar</button>
+            </div>
+          </div>
+        </div>
         <div style="position:relative;display:inline-block">
           <button id="f-status-group-btn" onclick="toggleStatusFilterMenu(event)" title="Filtrar por Status, Antecedentes e Ex-Colaborador"
             style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--gray-300);border-radius:8px;background:var(--white);cursor:pointer;font-size:.83rem;color:var(--gray-700)">
@@ -1397,10 +1461,24 @@ thead th {
           <option value="DOCUMENTACAO">📄 Documentação</option>
           <option value="ADMITIDO">✅ Admitido</option>
         </select>
-        <label title="Mostra candidatos com reprovação em Status, Antecedentes ou Ex-Colaborador sem motivo preenchido, e/ou sem a Etapa do Processo preenchida" style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--red);font-weight:600;cursor:pointer;user-select:none;border:1px solid #fca5a5;background:var(--red-light);border-radius:8px;padding:0 12px;height:34px">
-          <input id="f-motivo-pendente" type="checkbox" onchange="renderCandidatos(true)" style="cursor:pointer;width:13px;height:13px;margin:0;accent-color:var(--red)"/>
-          ⚠ Pendentes (motivo/etapa)
-        </label>
+        <div style="position:relative;display:inline-block">
+          <button id="f-pend-group-btn" onclick="togglePendFilterMenu(event)" title="Filtrar candidatos pendentes"
+            style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;cursor:pointer;font-size:.8rem;color:#92400e;font-weight:600">
+            ⚠ Pendentes
+            <span id="f-pend-group-badge" style="display:none;background:#d97706;color:#fff;font-size:.68rem;font-weight:700;border-radius:999px;padding:1px 6px;min-width:16px;text-align:center"></span>
+            <span style="font-size:.7rem;color:#92400e">▾</span>
+          </button>
+          <div id="f-pend-group-menu" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:260px;padding:12px;margin-top:4px;display:flex;flex-direction:column;gap:10px">
+            <label title="Mostra candidatos com reprovação em Status, Antecedentes ou Ex-Colaborador sem motivo preenchido, e/ou sem a Etapa do Processo preenchida" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;user-select:none">
+              <input id="f-motivo-pendente" type="checkbox" onchange="renderCandidatos(true);updatePendFilterBadge()" style="cursor:pointer;width:14px;height:14px;margin-top:2px;accent-color:var(--red)"/>
+              <span style="font-size:.82rem;color:var(--gray-700)"><strong>Motivo/Etapa</strong><br/><span style="font-size:.72rem;color:var(--gray-500)">Reprovação sem motivo, ou sem Etapa do Processo</span></span>
+            </label>
+            <label title="Mostra candidatos importados sem Status, Antecedentes ou Ex-Colaborador preenchidos na planilha — ainda não ajustados" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;user-select:none">
+              <input id="f-import-pendente" type="checkbox" onchange="renderCandidatos(true);updatePendFilterBadge()" style="cursor:pointer;width:14px;height:14px;margin-top:2px;accent-color:#d97706"/>
+              <span style="font-size:.82rem;color:var(--gray-700)"><strong>Importação</strong><br/><span style="font-size:.72rem;color:var(--gray-500)">Sem Status, Antecedentes ou Ex-Colaborador na planilha</span></span>
+            </label>
+          </div>
+        </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <div style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--gray-300);border-radius:8px;overflow:hidden;background:var(--gray-100)">
             <input id="f-nome-cand" type="text" placeholder="Nome ou CPF…"
@@ -1442,18 +1520,18 @@ thead th {
     </div>
   </div>
 </th>
-                <th>Nome</th>
-                <th>CPF</th>
-                <th>Cargo</th>
-                <th>Cidade</th>
-                <th>Feirão</th>
-                <th>Recrutador</th>
-                <th>Status</th>
-                <th>Antecedentes</th>
-                <th>Ex-Colaborador</th>
-                <th>Etapa</th>
-                <th>Admitido</th>
-                <th>Data Inclusão</th>
+                <th data-sort="nome" onclick="setCandSort('nome')" style="cursor:pointer;user-select:none" title="Ordenar por Nome">Nome <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="cpf" onclick="setCandSort('cpf')" style="cursor:pointer;user-select:none" title="Ordenar por CPF">CPF <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="cargo" onclick="setCandSort('cargo')" style="cursor:pointer;user-select:none" title="Ordenar por Cargo">Cargo <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="cidade" onclick="setCandSort('cidade')" style="cursor:pointer;user-select:none" title="Ordenar por Cidade">Cidade <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="feiraoNome" onclick="setCandSort('feiraoNome')" style="cursor:pointer;user-select:none" title="Ordenar por Feirão">Feirão <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="recrutadorNome" onclick="setCandSort('recrutadorNome')" style="cursor:pointer;user-select:none" title="Ordenar por Recrutador">Recrutador <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="statusProcesso" onclick="setCandSort('statusProcesso')" style="cursor:pointer;user-select:none" title="Ordenar por Status">Status <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="antecedentes" onclick="setCandSort('antecedentes')" style="cursor:pointer;user-select:none" title="Ordenar por Antecedentes">Antecedentes <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="recontratacao" onclick="setCandSort('recontratacao')" style="cursor:pointer;user-select:none" title="Ordenar por Ex-Colaborador">Ex-Colaborador <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="etapaProcesso" onclick="setCandSort('etapaProcesso')" style="cursor:pointer;user-select:none" title="Ordenar por Etapa">Etapa <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="admitido" onclick="setCandSort('admitido')" style="cursor:pointer;user-select:none" title="Ordenar por Admitido">Admitido <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="dataInclusao" onclick="setCandSort('dataInclusao')" style="cursor:pointer;user-select:none" title="Ordenar por Data de Inclusão">Data Inclusão <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -1579,18 +1657,46 @@ thead th {
               </div>
             </div>
 
-            <!-- Busca por nome -->
-            <div style="position:relative;display:flex;align-items:center">
-              <svg width="12" height="12" fill="none" stroke="var(--gray-400)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:8px;pointer-events:none"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input id="f-search-feirao" type="text" placeholder="Buscar feirão…" oninput="renderFeiraos()" style="width:130px;border:1px solid var(--gray-300);border-radius:8px;padding:5px 10px 5px 24px;font-size:.78rem"/>
+            <!-- Busca por nome (multi-seleção) -->
+            <div class="msel" id="msel-feirao" style="position:relative">
+              <button type="button" class="msel-btn" onclick="mselToggle('msel-feirao')" style="display:flex;align-items:center;gap:5px;border:1px solid var(--gray-300);border-radius:8px;padding:5px 10px;font-size:.78rem;background:var(--white);color:var(--gray-700);cursor:pointer">
+                <svg width="12" height="12" fill="none" stroke="var(--gray-400)" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span class="msel-label" id="msel-feirao-label">Feirão</span>
+                <span class="msel-badge" id="msel-feirao-badge" style="display:none"></span>
+              </button>
+              <div class="msel-panel" id="msel-feirao-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);width:220px;max-height:270px;flex-direction:column">
+                <input type="text" class="msel-search-input" placeholder="Filtrar feirões…" oninput="mselFilter('msel-feirao', this.value)" style="border:none;border-bottom:1px solid var(--gray-200);padding:8px 10px;font-size:.78rem;outline:none;border-radius:10px 10px 0 0"/>
+                <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:.74rem;font-weight:700;color:var(--gray-600);border-bottom:1px solid var(--gray-100);cursor:pointer;background:var(--gray-50)">
+                  <input type="checkbox" id="msel-feirao-all" onchange="mselToggleAll('msel-feirao', this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:var(--blue-700);flex-shrink:0"/>
+                  Selecionar todos
+                </label>
+                <div class="msel-list" id="msel-feirao-list" style="overflow-y:auto;max-height:190px;padding:4px 0"></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 10px;border-top:1px solid var(--gray-100)">
+                  <button type="button" onclick="mselClearAll('msel-feirao')" style="border:none;background:none;color:var(--gray-500);font-size:.72rem;cursor:pointer;padding:2px 4px">Limpar</button>
+                  <button type="button" onclick="mselToggle('msel-feirao')" style="border:none;background:none;color:var(--blue-700);font-size:.72rem;font-weight:700;cursor:pointer;padding:2px 4px">Fechar</button>
+                </div>
+              </div>
             </div>
 
-            <!-- Recrutador -->
-            <div style="position:relative;display:flex;align-items:center">
-              <svg width="12" height="12" fill="none" stroke="var(--gray-400)" stroke-width="2" viewBox="0 0 24 24" style="position:absolute;left:8px;pointer-events:none"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <select id="f-search-recrutador" onchange="renderFeiraos()" style="border:1px solid var(--gray-300);border-radius:8px;padding:5px 8px 5px 24px;font-size:.78rem;background:var(--white);color:var(--gray-700)">
-                <option value="">Todos</option>
-              </select>
+            <!-- Recrutador (multi-seleção) -->
+            <div class="msel" id="msel-rec" style="position:relative">
+              <button type="button" class="msel-btn" onclick="mselToggle('msel-rec')" style="display:flex;align-items:center;gap:5px;border:1px solid var(--gray-300);border-radius:8px;padding:5px 10px;font-size:.78rem;background:var(--white);color:var(--gray-700);cursor:pointer">
+                <svg width="12" height="12" fill="none" stroke="var(--gray-400)" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span class="msel-label" id="msel-rec-label">Recrutador</span>
+                <span class="msel-badge" id="msel-rec-badge" style="display:none"></span>
+              </button>
+              <div class="msel-panel" id="msel-rec-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:var(--white);border:1px solid var(--gray-200);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);width:200px;max-height:270px;flex-direction:column">
+                <input type="text" class="msel-search-input" placeholder="Filtrar recrutadores…" oninput="mselFilter('msel-rec', this.value)" style="border:none;border-bottom:1px solid var(--gray-200);padding:8px 10px;font-size:.78rem;outline:none;border-radius:10px 10px 0 0"/>
+                <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:.74rem;font-weight:700;color:var(--gray-600);border-bottom:1px solid var(--gray-100);cursor:pointer;background:var(--gray-50)">
+                  <input type="checkbox" id="msel-rec-all" onchange="mselToggleAll('msel-rec', this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:var(--blue-700);flex-shrink:0"/>
+                  Selecionar todos
+                </label>
+                <div class="msel-list" id="msel-rec-list" style="overflow-y:auto;max-height:190px;padding:4px 0"></div>
+                <div style="display:flex;justify-content:space-between;padding:6px 10px;border-top:1px solid var(--gray-100)">
+                  <button type="button" onclick="mselClearAll('msel-rec')" style="border:none;background:none;color:var(--gray-500);font-size:.72rem;cursor:pointer;padding:2px 4px">Limpar</button>
+                  <button type="button" onclick="mselToggle('msel-rec')" style="border:none;background:none;color:var(--blue-700);font-size:.72rem;font-weight:700;cursor:pointer;padding:2px 4px">Fechar</button>
+                </div>
+              </div>
             </div>
 
             <!-- Status -->
@@ -1617,6 +1723,9 @@ thead th {
       <!-- CSS responsivo para empilhar em telas menores -->
       <style>
         @media(max-width:900px){#cal-main-grid{grid-template-columns:1fr!important}}
+        .msel-btn:hover{border-color:var(--gray-400)!important}
+        .msel-badge{background:var(--blue-700);color:#fff;border-radius:999px;font-size:.65rem;font-weight:700;padding:1px 6px;line-height:1.3}
+        .msel-list label:hover{background:var(--gray-50)}
       </style>
 
       <!-- Hidden elements kept for JS compatibility -->
@@ -2485,7 +2594,7 @@ function confirm_(msg, fn) {
 // ═══════════════════════════════════════
 function populateFeiraoSelects() {
   const feiraos = DB.feiraos();
-  const ids = ['f-feirao-cand','an-feirao','mc-feirao','mev-feirao-link'];
+  const ids = ['an-feirao','mc-feirao','mev-feirao-link'];
   ids.forEach(id => {
     const sel = document.getElementById(id);
     if(!sel) return;
@@ -2501,6 +2610,13 @@ function populateFeiraoSelects() {
     if(val) sel.value = val;
   });
   populateImpFeiraoSelect();
+  // Popula o multi-seleção de feirões dos filtros (página Calendário, Candidatos e Analytics)
+  if(window.mselSetOptions) {
+    const opts = feiraos.map(f => ({value:f.id, label:f.nomeFeirao}));
+    mselSetOptions('msel-feirao', opts);
+    mselSetOptions('msel-feirao-cand', opts);
+    mselSetOptions('msel-feirao-an', opts);
+  }
 }
 
 // ── Popula o select "Feirão de destino" da tela de Importação, respeitando
@@ -2532,7 +2648,7 @@ function populateImpFeiraoSelect() {
 }
 
 function populateAnRecSelect() {
-  const recIds = ['an-rec','f-search-recrutador','f-rec-cand'];
+  const recIds = ['an-rec'];
   recIds.forEach(id => {
     const sel = document.getElementById(id);
     if(!sel) return;
@@ -2545,6 +2661,211 @@ function populateAnRecSelect() {
     });
     if(val) sel.value = val;
   });
+  // Popula o multi-seleção de recrutadores dos filtros (página Calendário, Candidatos e Analytics)
+  if(window.mselSetOptions) {
+    const opts = DB.recrutadores().map(r => ({value:r.id, label:r.nome}));
+    mselSetOptions('msel-rec', opts);
+    mselSetOptions('msel-rec-cand', opts);
+    mselSetOptions('msel-rec-an', opts);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// Componente de multi-seleção (checkbox dropdown) reutilizável,
+// usado nos filtros de Feirão e Recrutador da página Calendário.
+// ────────────────────────────────────────────────────────────────
+window._mselSelections = window._mselSelections || { 'msel-feirao': new Set(), 'msel-rec': new Set(), 'msel-feirao-cand': new Set(), 'msel-rec-cand': new Set(), 'msel-feirao-an': new Set(), 'msel-rec-an': new Set() };
+window._mselOpen = null;
+
+function mselTriggerRender(id) {
+  if(id === 'msel-feirao' || id === 'msel-rec') {
+    if(window.renderFeiraos) renderFeiraos();
+  } else if(id === 'msel-feirao-cand' || id === 'msel-rec-cand') {
+    if(window.renderCandidatos) renderCandidatos(true);
+  } else if(id === 'msel-feirao-an' || id === 'msel-rec-an') {
+    if(window.renderDashboard) renderDashboard();
+  } else if(window.renderFeiraos) {
+    renderFeiraos();
+  }
+}
+
+function mselToggle(id) {
+  const panel = document.getElementById(id+'-panel');
+  if(!panel) return;
+  const isOpen = panel.style.display === 'flex';
+  document.querySelectorAll('.msel-panel').forEach(p => p.style.display='none');
+  if(!isOpen) {
+    panel.style.display = 'flex';
+    window._mselOpen = id;
+    const searchInput = panel.querySelector('.msel-search-input');
+    if(searchInput) { searchInput.value=''; mselFilter(id, ''); searchInput.focus(); }
+  } else {
+    window._mselOpen = null;
+  }
+}
+
+document.addEventListener('click', function(e){
+  if(window._mselOpen) {
+    const wrap = document.getElementById(window._mselOpen);
+    if(wrap && !wrap.contains(e.target)) {
+      const panel = document.getElementById(window._mselOpen+'-panel');
+      if(panel) panel.style.display='none';
+      window._mselOpen = null;
+    }
+  }
+});
+
+function mselSetOptions(id, items) {
+  const list = document.getElementById(id+'-list');
+  if(!list) return;
+  const sel = window._mselSelections[id] || (window._mselSelections[id]=new Set());
+  // Remove seleções de itens que não existem mais
+  Array.from(sel).forEach(v => { if(!items.some(it=>it.value===v)) sel.delete(v); });
+  list.innerHTML = items.length ? items.map(it => `
+    <label data-label="${esc(normStr(it.label))}" data-checked="${sel.has(it.value)?'1':'0'}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:.78rem;cursor:pointer;color:var(--gray-700);background:${sel.has(it.value)?'var(--blue-50, #eef4ff)':'transparent'}">
+      <input type="checkbox" value="${esc(it.value)}" ${sel.has(it.value)?'checked':''} onchange="mselOnCheck('${id}', this)" style="cursor:pointer;width:15px;height:15px;accent-color:var(--blue-700);flex-shrink:0"/>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${sel.has(it.value)?'700':'400'}">${esc(it.label)}</span>
+    </label>
+  `).join('') : `<div style="padding:14px 10px;font-size:.75rem;color:var(--gray-400);text-align:center">Nenhuma opção</div>`;
+  mselUpdateLabel(id);
+  mselSyncAllCheckbox(id);
+}
+
+function mselOnCheck(id, input) {
+  const sel = window._mselSelections[id] || (window._mselSelections[id]=new Set());
+  if(input.checked) sel.add(input.value); else sel.delete(input.value);
+  const label = input.closest('label');
+  if(label) {
+    label.setAttribute('data-checked', input.checked ? '1' : '0');
+    label.style.background = input.checked ? 'var(--blue-50, #eef4ff)' : 'transparent';
+    const span = label.querySelector('span');
+    if(span) span.style.fontWeight = input.checked ? '700' : '400';
+  }
+  mselUpdateLabel(id);
+  mselSyncAllCheckbox(id);
+  mselTriggerRender(id);
+}
+
+// Marca/desmarca de uma vez todas as opções atualmente visíveis (respeita o
+// filtro de busca interno do dropdown, se houver algum texto digitado).
+function mselToggleAll(id, checked) {
+  const list = document.getElementById(id+'-list');
+  if(!list) return;
+  const sel = window._mselSelections[id] || (window._mselSelections[id]=new Set());
+  list.querySelectorAll('label').forEach(l => {
+    if(l.style.display === 'none') return; // respeita busca interna
+    const cb = l.querySelector('input[type=checkbox]');
+    if(!cb) return;
+    cb.checked = checked;
+    l.setAttribute('data-checked', checked ? '1' : '0');
+    l.style.background = checked ? 'var(--blue-50, #eef4ff)' : 'transparent';
+    const span = l.querySelector('span');
+    if(span) span.style.fontWeight = checked ? '700' : '400';
+    if(checked) sel.add(cb.value); else sel.delete(cb.value);
+  });
+  mselUpdateLabel(id);
+  mselSyncAllCheckbox(id);
+  mselTriggerRender(id);
+}
+
+// Atualiza o estado (marcado / parcial / desmarcado) do checkbox "Selecionar todos"
+function mselSyncAllCheckbox(id) {
+  const allCb = document.getElementById(id+'-all');
+  const list = document.getElementById(id+'-list');
+  if(!allCb || !list) return;
+  const boxes = Array.from(list.querySelectorAll('input[type=checkbox]'));
+  const total = boxes.length;
+  const checkedCount = boxes.filter(b=>b.checked).length;
+  allCb.checked = total>0 && checkedCount===total;
+  allCb.indeterminate = checkedCount>0 && checkedCount<total;
+}
+
+function mselFilter(id, term) {
+  const list = document.getElementById(id+'-list');
+  if(!list) return;
+  const t = normStr(term||'');
+  list.querySelectorAll('label').forEach(l => {
+    const lbl = l.getAttribute('data-label')||'';
+    l.style.display = (!t || lbl.includes(t)) ? 'flex' : 'none';
+  });
+  mselSyncAllCheckbox(id);
+}
+
+function mselClearAll(id) {
+  window._mselSelections[id] = new Set();
+  const list = document.getElementById(id+'-list');
+  if(list) list.querySelectorAll('label').forEach(l => {
+    const cb = l.querySelector('input[type=checkbox]');
+    if(cb) cb.checked=false;
+    l.setAttribute('data-checked','0');
+    l.style.background = 'transparent';
+    const span = l.querySelector('span');
+    if(span) span.style.fontWeight = '400';
+  });
+  mselUpdateLabel(id);
+  mselSyncAllCheckbox(id);
+  mselTriggerRender(id);
+}
+
+function mselClearAllSilent(id) {
+  window._mselSelections[id] = new Set();
+  const list = document.getElementById(id+'-list');
+  if(list) list.querySelectorAll('label').forEach(l => {
+    const cb = l.querySelector('input[type=checkbox]');
+    if(cb) cb.checked=false;
+    l.setAttribute('data-checked','0');
+    l.style.background = 'transparent';
+    const span = l.querySelector('span');
+    if(span) span.style.fontWeight = '400';
+  });
+  mselUpdateLabel(id);
+  mselSyncAllCheckbox(id);
+}
+
+const MSEL_PLACEHOLDERS = {
+  'msel-feirao': 'Feirão',
+  'msel-rec': 'Recrutador',
+  'msel-feirao-cand': 'Todos os Feirões',
+  'msel-rec-cand': 'Todos os Recrutadores',
+  'msel-feirao-an': 'Todos os Feirões',
+  'msel-rec-an': 'Todos os Recrutadores'
+};
+
+function mselUpdateLabel(id) {
+  const sel = window._mselSelections[id] || new Set();
+  const labelEl = document.getElementById(id+'-label');
+  const badgeEl = document.getElementById(id+'-badge');
+  const placeholder = MSEL_PLACEHOLDERS[id] || id;
+  if(labelEl) labelEl.textContent = placeholder;
+  if(badgeEl) {
+    if(sel.size) { badgeEl.textContent = sel.size; badgeEl.style.display='inline-block'; }
+    else badgeEl.style.display='none';
+  }
+}
+
+function mselGetSelected(id) {
+  return window._mselSelections[id] || new Set();
+}
+
+// Seleciona programaticamente um único valor (usado ao navegar de um Feirão
+// específico para a tela de Candidatos, ex: botão "Ver candidatos").
+function mselSetSingle(id, value) {
+  window._mselSelections[id] = new Set(value ? [value] : []);
+  const list = document.getElementById(id+'-list');
+  if(list) {
+    list.querySelectorAll('label').forEach(l => {
+      const cb = l.querySelector('input[type=checkbox]');
+      if(!cb) return;
+      const checked = cb.value === value;
+      cb.checked = checked;
+      l.setAttribute('data-checked', checked?'1':'0');
+      l.style.background = checked ? 'var(--blue-50, #eef4ff)' : 'transparent';
+      const span = l.querySelector('span');
+      if(span) span.style.fontWeight = checked ? '700' : '400';
+    });
+  }
+  mselUpdateLabel(id);
+  mselSyncAllCheckbox(id);
 }
 
 // ── Popula os seletores de Mês/Ano (filtro do Dashboard e exportação do
@@ -2658,6 +2979,9 @@ document.addEventListener('click', e => {
   const statusMenu = document.getElementById('f-status-group-menu');
   const statusBtn = document.getElementById('f-status-group-btn');
   if(statusMenu && !statusMenu.contains(e.target) && !statusBtn?.contains(e.target)) statusMenu.style.display = 'none';
+  const pendMenu = document.getElementById('f-pend-group-menu');
+  const pendBtn = document.getElementById('f-pend-group-btn');
+  if(pendMenu && !pendMenu.contains(e.target) && !pendBtn?.contains(e.target)) pendMenu.style.display = 'none';
   document.querySelectorAll('.autocomplete-list').forEach(l => {
     if(!l.parentElement.contains(e.target)) l.style.display='none';
   });
@@ -2954,6 +3278,31 @@ async function toggleFeirao(id) {
   }
 }
 
+// ── Encerramento automático de feirões vencidos ──
+// Roda ao abrir o sistema e depois periodicamente (a cada hora), enquanto o
+// sistema ficar aberto. Qualquer feirão com statusFeirao='ABERTO' cuja
+// dataEvento seja ANTERIOR ao dia de hoje passa automaticamente para
+// 'ENCERRADO'. Ex.: feirão dia 07/07 continua "Aberto" durante todo o dia
+// 07/07; a partir de 08/07 (dia seguinte) ele é encerrado sozinho.
+// Não mexe em feirões já encerrados manualmente, nem nos que ainda vão
+// acontecer ou que são hoje.
+async function autoEncerrarFeiroesVencidos() {
+  try {
+    const all = DB.feiraos();
+    const hoje = today();
+    const vencidos = all.filter(f => f.statusFeirao === 'ABERTO' && f.dataEvento && f.dataEvento < hoje);
+    if (!vencidos.length) return;
+    vencidos.forEach(f => { f.statusFeirao = 'ENCERRADO'; });
+    await DB.saveFeiraos(all);
+    console.log(`[auto-encerramento] ${vencidos.length} feirão(ões) encerrado(s) automaticamente (data vencida).`);
+    // Atualiza a tela caso a página visível dependa desses dados
+    if (window.currentPage === 'calendario' && window.renderCalendar) { renderCalendar(); if(window.renderFeiraos) renderFeiraos(); }
+    if (window.currentPage === 'dashboard' && window.renderDashboard) renderDashboard();
+  } catch(e) {
+    console.warn('Erro ao auto-encerrar feirões vencidos:', e);
+  }
+}
+
 let _feirasModo = 'mes';
 
 function setFeirasModo(modo) {
@@ -2978,8 +3327,8 @@ function renderFeiraos() {
   if (window._safeRender && window._safeRender('feiraos')) return;
   const feiraos = DB.feiraos();
   const cands = DB.candidatos();
-  const q = normStr(document.getElementById('f-search-feirao')?.value||'');
-  const qr = document.getElementById('f-search-recrutador')?.value||'';
+  const selFeiraoIds = mselGetSelected('msel-feirao');
+  const selRecIds = mselGetSelected('msel-rec');
   const qs = document.getElementById('f-status-feirao')?.value||'';
   const modo = typeof _feirasModo !== 'undefined' ? _feirasModo : 'mes';
 
@@ -3003,8 +3352,10 @@ function renderFeiraos() {
       if(fDia && fDia !== '00' && fD !== fDia) return false;
     }
     // Filtros comuns
-    return (!q || normStr(f.nomeFeirao).includes(q)) &&
-      (!qr || f.recrutadorId===qr || f.recrutadorNome===qr) &&
+    const recMatch = !selRecIds.size || selRecIds.has(f.recrutadorId) ||
+      (Array.isArray(f.recrutadoresExtras) && f.recrutadoresExtras.some(r => selRecIds.has(r.id)));
+    return (!selFeiraoIds.size || selFeiraoIds.has(f.id)) &&
+      recMatch &&
       (!qs || f.statusFeirao===qs);
   });
 
@@ -3058,7 +3409,7 @@ function renderFeiraos() {
       </div>
       <!-- Ações -->
       <div style="display:flex;gap:4px;flex-shrink:0">
-        <button class="btn btn-secondary btn-sm" style="font-size:.72rem;padding:3px 7px" onclick="navigate('candidatos');document.getElementById('f-feirao-cand').value='${f.id}';renderCandidatos()" title="Ver candidatos">👥</button>
+        <button class="btn btn-secondary btn-sm" style="font-size:.72rem;padding:3px 7px" onclick="navigate('candidatos');mselSetSingle('msel-feirao-cand','${f.id}');renderCandidatos()" title="Ver candidatos">👥</button>
         <button class="btn btn-secondary btn-sm" style="font-size:.72rem;padding:3px 7px" onclick="openFeiraModal('${f.id}')" title="Editar">✏</button>
         <button class="btn btn-secondary btn-sm" style="font-size:.72rem;padding:3px 7px" onclick="toggleFeirao('${f.id}')" title="${isAberto?'Encerrar':'Reabrir'}">${isAberto?'🔒':'🔓'}</button>
         <button class="btn btn-danger btn-sm" style="font-size:.72rem;padding:3px 7px" onclick="deleteFeirao('${f.id}')" title="Excluir">✕</button>
@@ -3068,10 +3419,8 @@ function renderFeiraos() {
 }
 
 function clearFeiraFilters() {
-  const s = document.getElementById("f-search-feirao");
-  if(s) s.value="";
-  const r = document.getElementById("f-search-recrutador");
-  if(r) r.value="";
+  mselClearAllSilent('msel-feirao');
+  mselClearAllSilent('msel-rec');
   const st = document.getElementById("f-status-feirao");
   if(st) st.value="";
   const diaEl=document.getElementById("f-filtro-dia");
@@ -3089,6 +3438,70 @@ function clearFeiraFilters() {
 let editCandId = null;
 let _candPage = 1;
 const _CAND_PER_PAGE = 50; // 50 por página — DOM leve mesmo com 25k candidatos
+
+// ── Ordenação da tabela de candidatos: colunas clicáveis. Padrão: Nome A-Z.
+let _candSort = { field: 'nome', dir: 'asc' };
+
+// ── Extrai o valor comparável de cada candidato para um campo de ordenação.
+function _candSortValue(c, field) {
+  switch (field) {
+    case 'nome':        return normStr(c.nome||'');
+    case 'cpf':          return (c.cpf||'').replace(/\D/g,'');
+    case 'cargo':        return normStr(c.cargo||'');
+    case 'cidade':       return normStr(c.cidade||c.feiraoLocal||'');
+    case 'feiraoNome':   return normStr(c.feiraoNome||'');
+    case 'recrutadorNome': return normStr(c.recrutadorNome||'');
+    case 'statusProcesso': return normStr(statusLabel(c.statusProcesso)||'');
+    case 'antecedentes': return c.antecedentes==='APROVADO'?'a':c.antecedentes==='REPROVADO'?'b':'c';
+    case 'recontratacao':return normStr(c.recontratacao||'zzz');
+    case 'etapaProcesso':return normStr(etapaLabel(c.etapaProcesso)||'');
+    case 'admitido':     return c.admitido ? 1 : 0;
+    case 'dataInclusao': return c.dataInclusao || '';
+    default:              return '';
+  }
+}
+
+// ── Ordena o array filtrado de candidatos conforme _candSort.
+function _sortCandidatos(list) {
+  const { field, dir } = _candSort;
+  const mult = dir === 'asc' ? 1 : -1;
+  return list.slice().sort((a, b) => {
+    const va = _candSortValue(a, field);
+    const vb = _candSortValue(b, field);
+    if (va < vb) return -1 * mult;
+    if (va > vb) return 1 * mult;
+    // Empate: nome como critério de desempate, para ordem estável e previsível
+    return normStr(a.nome||'').localeCompare(normStr(b.nome||'')) * mult;
+  });
+}
+
+// ── Clique no cabeçalho da coluna: alterna direção se já for a coluna ativa,
+//    senão troca de coluna (começando em ascendente).
+function setCandSort(field) {
+  if (_candSort.field === field) {
+    _candSort.dir = _candSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _candSort = { field, dir: 'asc' };
+  }
+  _candPage = 1;
+  renderCandidatos();
+}
+
+// ── Atualiza as setinhas ▲▼ nos cabeçalhos clicáveis conforme a ordenação ativa.
+function _updateCandSortIndicators() {
+  document.querySelectorAll('#page-candidatos th[data-sort]').forEach(th => {
+    const field = th.getAttribute('data-sort');
+    const arrow = th.querySelector('.sort-arrow');
+    if (!arrow) return;
+    if (field === _candSort.field) {
+      arrow.textContent = _candSort.dir === 'asc' ? '▲' : '▼';
+      arrow.style.opacity = '1';
+    } else {
+      arrow.textContent = '▲';
+      arrow.style.opacity = '.25';
+    }
+  });
+}
 
 // ── Debounce para busca/filtro: aguarda 300ms após o usuário parar de digitar
 // antes de percorrer o array inteiro — evita travar a UI a cada tecla com 20k+ registros
@@ -3320,6 +3733,15 @@ function viewCandidato(id) {
   openModal('modal-cand-detail');
 }
 
+// ── Considera "Em Análise" tanto o status explícito quanto o status em
+//    branco (pendente de importação, ainda não ajustado manualmente).
+//    Usado nas contagens do dashboard e no filtro por Status — o candidato
+//    continua sendo exibido como "Pendente" (badge cinza) nas listagens,
+//    isso só afeta a contabilização/agrupamento como Em Análise.
+function _isEmAnalise(c) {
+  return c.statusProcesso === 'EM_ANALISE' || !c.statusProcesso;
+}
+
 // ── Verifica se um candidato é "Aprovado consolidado":
 //    status final Aprovado E antecedentes OK E recontratação não reprovada
 function _isAprovadoConsolidado(c) {
@@ -3358,33 +3780,46 @@ function _temPendencia(c) {
   return _motivoReprovacaoPendente(c) || _etapaPendente(c);
 }
 
+// ── Candidato importado sem Status, Antecedentes ou Ex-Colaborador
+//    preenchidos na planilha original (ver extractImportRow). Diferente de
+//    _temPendencia acima — aqui o foco é achar quem ainda não teve esses
+//    três campos revisados/ajustados após a importação.
+function _importPendente(c) {
+  return !c.statusProcesso || !c.antecedentes || !c.recontratacao;
+}
+
 function getFilteredCandidatos() {
   const cands = DB.candidatos();
-  const fid    = document.getElementById('f-feirao-cand')?.value||'';
+  const fid    = mselGetSelected('msel-feirao-cand');
   const q      = normStr(document.getElementById('f-nome-cand')?.value||'');
-  const qr     = document.getElementById('f-rec-cand')?.value||'';
+  const qr     = mselGetSelected('msel-rec-cand');
   const qs     = document.getElementById('f-status-cand')?.value||'';
   const qa     = document.getElementById('f-ant-cand')?.value||'';
   const qrecont= document.getElementById('f-recont-cand')?.value||'';
   const qadm   = document.getElementById('f-admitido-cand')?.value||'';
   const qetapa = document.getElementById('f-etapa-cand')?.value||'';
   const qPendente = document.getElementById('f-motivo-pendente')?.checked || false;
+  const qImportPendente = document.getElementById('f-import-pendente')?.checked || false;
   const qDigits = q ? q.replace(/[^0-9]/g,'') : '';
   const qHasDigits = /[0-9]/.test(q);
   const qCidadeCargo = document.getElementById('f-nome-cidade-cargo')?.checked || false;
 
   // Sem nenhum filtro ativo: retorna tudo sem iterar
-  if (!fid && !q && !qr && !qs && !qa && !qrecont && !qadm && !qetapa && !qPendente) return cands;
+  if (!fid.size && !q && !qr.size && !qs && !qa && !qrecont && !qadm && !qetapa && !qPendente && !qImportPendente) return cands;
 
   return cands.filter(c => {
-    if (fid    && c.feiraoId !== fid) return false;
-    if (qr     && c.recrutadorId !== qr) return false;
-    if (qs     && c.statusProcesso !== qs) return false;
-    if (qa     && c.antecedentes !== qa) return false;
-    if (qrecont&& c.recontratacao !== qrecont) return false;
+    if (fid.size && !fid.has(c.feiraoId)) return false;
+    if (qr.size  && !qr.has(c.recrutadorId)) return false;
+    if (qs     && !(qs==='PENDENTE' ? !c.statusProcesso : (qs==='EM_ANALISE' ? _isEmAnalise(c) : c.statusProcesso === qs))) return false;
+    if (qa     && !(qa==='PENDENTE' ? !c.antecedentes : c.antecedentes === qa)) return false;
+    if (qrecont&& !(qrecont==='PENDENTE' ? !c.recontratacao : c.recontratacao === qrecont)) return false;
     if (qadm   && (qadm === '1' ? !c.admitido : c.admitido)) return false;
     if (qetapa && c.etapaProcesso !== qetapa) return false;
-    if (qPendente && !_temPendencia(c)) return false;
+    if (qPendente || qImportPendente) {
+      const matchMotivoEtapa = qPendente && _temPendencia(c);
+      const matchImportacao  = qImportPendente && _importPendente(c);
+      if (!matchMotivoEtapa && !matchImportacao) return false;
+    }
     if (q) {
       // Nome e CPF sempre pesquisados
       const nomeOk   = normStr(c.nome).includes(q);
@@ -3403,7 +3838,7 @@ function renderCandidatos(resetPage=false) {
   if(resetPage) { _candPage = 1; _selectAllPages = false; }
   // Para volumes grandes, adia o filtro/render para não travar a navegação
   const _doRenderCands = () => {
-  const list = getFilteredCandidatos();
+  const list = _sortCandidatos(getFilteredCandidatos());
   const total = list.length;
   const totalPages = Math.max(1, Math.ceil(total / _CAND_PER_PAGE));
   if(_candPage > totalPages) _candPage = totalPages;
@@ -3414,7 +3849,7 @@ function renderCandidatos(resetPage=false) {
   document.getElementById('cand-count-label').textContent = `${total} candidato(s) — exibindo ${showing}`;
 
   const tbody = document.getElementById('candidatos-tbody');
-  if(!page.length){tbody.innerHTML=`<tr><td colspan="14" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();renderCandPagination(0,1,1);return;}
+  if(!page.length){tbody.innerHTML=`<tr><td colspan="14" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();renderCandPagination(0,1,1);_updateCandSortIndicators();return;}
   tbody.innerHTML = page.map(c => {
     const pendente = _motivoReprovacaoPendente(c);
     const reprovado = _isReprovadoConsolidado(c);
@@ -3447,6 +3882,7 @@ function renderCandidatos(resetPage=false) {
   }).join('');
   updateBulkBar();
   renderCandPagination(total, _candPage, totalPages);
+  _updateCandSortIndicators();
   }; // fim _doRenderCands
   if (DB.candidatos().length > 3000) {
     if (typeof requestIdleCallback !== 'undefined') {
@@ -3510,7 +3946,12 @@ function clearCandFilters() {
   if (ccEl) ccEl.checked = false;
   const pendEl = document.getElementById('f-motivo-pendente');
   if (pendEl) pendEl.checked = false;
-  ['f-feirao-cand','f-rec-cand','f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand'].forEach(id=>document.getElementById(id).value='');
+  const impPendEl = document.getElementById('f-import-pendente');
+  if (impPendEl) impPendEl.checked = false;
+  updatePendFilterBadge();
+  mselClearAllSilent('msel-feirao-cand');
+  mselClearAllSilent('msel-rec-cand');
+  ['f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand'].forEach(id=>document.getElementById(id).value='');
   updateStatusFilterBadge();
   renderCandidatos(true);
 }
@@ -3571,6 +4012,20 @@ function toggleStatusFilterMenu(e) {
   e.stopPropagation();
   const menu = document.getElementById('f-status-group-menu');
   menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+}
+
+function togglePendFilterMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('f-pend-group-menu');
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+}
+
+function updatePendFilterBadge() {
+  const badge = document.getElementById('f-pend-group-badge');
+  if(!badge) return;
+  const n = ['f-motivo-pendente','f-import-pendente'].filter(id => document.getElementById(id)?.checked).length;
+  badge.textContent = n;
+  badge.style.display = n ? 'inline-block' : 'none';
 }
 
 function updateStatusFilterBadge() {
@@ -3885,9 +4340,9 @@ function renderDashboard() {
   const _doRender = () => {
   let cands = DB.candidatos();
   const feiraos = DB.feiraos();
-  // Aplica filtros (mesmos do antigo Analytics)
-  const fid = document.getElementById('an-feirao')?.value||'';
-  const qr  = document.getElementById('an-rec')?.value||'';
+  // Aplica filtros (mesmos do antigo Analytics) usando multi-select
+  const fid = mselGetSelected('msel-feirao-an');
+  const qr  = mselGetSelected('msel-rec-an');
   const mesRaw = document.getElementById('an-mes')?.value||'';
   const mes = mesRaw ? mesRaw.padStart(2,'0') : '';
   const ano = document.getElementById('an-ano')?.value||'';
@@ -3899,8 +4354,8 @@ function renderDashboard() {
   feiraos.forEach(f => { if(f.dataEvento) feiraoDataMap[f.id] = f.dataEvento; });
 
   cands = cands.filter(c=>{
-    if(fid && c.feiraoId!==fid) return false;
-    if(qr  && c.recrutadorId!==qr) return false;
+    if(fid.size && !fid.has(c.feiraoId)) return false;
+    if(qr.size  && !qr.has(c.recrutadorId)) return false;
     if(dia || mes || ano){
       // Usa sempre a dataEvento do feirão vinculado ao candidato (igual ao calendário)
       const d = String(feiraoDataMap[c.feiraoId] || '');
@@ -3916,7 +4371,7 @@ function renderDashboard() {
   const total  = cands.length;
   const aprov  = cands.filter(c=>c.statusProcesso==='APROVADO').length;
   const reprov = cands.filter(c=>c.statusProcesso==='REPROVADO').length;
-  const analise= cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const analise= cands.filter(_isEmAnalise).length;
   const admitidos = cands.filter(c=>c.admitido).length;
   const taxa   = total ? Math.round(aprov/total*100) : 0;
 
@@ -3990,7 +4445,7 @@ function renderDashboard() {
 
   // Insights
   const taxaAdm=total?Math.round(admitidos/total*100):0;
-  const pendentes=cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const pendentes=cands.filter(_isEmAnalise).length;
   const feiraosAbertos=feiraos.filter(f=>f.statusFeirao==='ABERTO').length;
   const recCounts={};
   cands.forEach(c=>{const k=c.recrutadorNome;if(!k)return;recCounts[k]=(recCounts[k]||{total:0,aprov:0});recCounts[k].total++;if(c.statusProcesso==='APROVADO')recCounts[k].aprov++;});
@@ -4040,8 +4495,8 @@ function renderDashboard() {
 }
 
 function clearDashFilters() {
-  document.getElementById('an-feirao').value='';
-  document.getElementById('an-rec').value='';
+  mselClearAll('msel-feirao-an');
+  mselClearAll('msel-rec-an');
   document.getElementById('an-dia').value='';
   document.getElementById('an-mes').value='';
   document.getElementById('an-ano').value='';
@@ -4229,9 +4684,15 @@ const IMPORT_FIELD_MAP = {
 // ── Extrai e normaliza os dados de uma linha da planilha, usando apenas
 // os campos definidos em IMPORT_FIELD_MAP (colunas extras são ignoradas).
 function extractImportRow(r) {
+  // NOTA: quando a célula da planilha vem vazia/ausente, os mapeadores abaixo
+  // retornam '' (em vez de assumir um valor padrão como "Em Análise",
+  // "Aprovado" ou "Nunca trabalhou na GPS"). Isso deixa o campo pendente,
+  // exibido como "Pendente" nas listagens, até ser ajustado manualmente ou
+  // em massa — evita que a importação preencha automaticamente informação
+  // que na verdade não veio da planilha.
   const mapStatus = v => {
     const s = normStr(String(v||''));
-    if(!s || s==='undefined' || s==='null') return 'EM_ANALISE';
+    if(!s || s==='undefined' || s==='null') return '';
     if(['aprovado','aprov','aprovada','ok','apto','apta','passou','selecionado','selecionada','liberado','liberada','positivo','positiva','sim','yes','1','true','x','valido','valida'].includes(s)) return 'APROVADO';
     if(['reprovado','reprov','reprovada','naoaprovado','nao aprovado','inapto','inapta','recusado','recusada','negado','negada','negativo','negativa','nao','no','0','false','invalido','invalida','bloqueado','bloqueada'].includes(s)) return 'REPROVADO';
     if(s.includes('analise')||s.includes('andamento')||s.includes('pendente')||s.includes('aguardando')) return 'EM_ANALISE';
@@ -4241,13 +4702,13 @@ function extractImportRow(r) {
   };
   const mapAnt = v => {
     const s = normStr(String(v||''));
-    if(!s || s==='undefined' || s==='null') return 'APROVADO';
+    if(!s || s==='undefined' || s==='null') return '';
     if(s.includes('reprov')||s.includes('negativ')||s.includes('possui')||s.includes('inapt')||s.includes('bloqu')||['reprovado','negativo','possui','inapto','bloqueado'].includes(s)) return 'REPROVADO';
     return 'APROVADO';
   };
   const mapRec = v => {
     const s = normStr(String(v||''));
-    if(!s || s==='undefined' || s==='null') return 'NUNCA_TRABALHOU_NA_GPS';
+    if(!s || s==='undefined' || s==='null') return '';
     if(s.includes('nunca')||s.includes('jamais')||s.includes('primeiro')||s.includes('nova contratacao')||s.includes('nao trabalhou')) return 'NUNCA_TRABALHOU_NA_GPS';
     if(s.includes('reprov')||s.includes('bloqu')||s.includes('nao recon')||s.includes('naorecon')||['reprovado','bloqueado','naorecontratar'].includes(s)) return 'REPROVADO';
     if(s.includes('aprov')||s.includes('libera')||s.includes('recontratavel')||['aprovado','liberado','apto'].includes(s)) return 'APROVADO';
@@ -4900,7 +5361,7 @@ function exportCalendarPDF(scope, month, year) {
 }
 
 function exportCandidatosExcel() {
-  const data = getFilteredCandidatos().map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':c.recrutadorNome,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'⚠ Motivo Pendente':_motivoReprovacaoPendente(c)?'SIM':'','Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Data Inclusão':fmt(c.dataInclusao)||''}));
+  const data = _sortCandidatos(getFilteredCandidatos()).map(c=>({'Nome':c.nome,'CPF':c.cpf,'Telefone':c.telefone||'','Cargo':c.cargo||'','Cidade':c.cidade||c.feiraoLocal||'','Endereço':c.endereco||'','Admitido':c.admitido?'SIM':'NÃO','Feirão':c.feiraoNome,'Recrutador':c.recrutadorNome,'Status':c.statusProcesso,'Antecedentes':c.antecedentes,'Recontratação':c.recontratacao,'⚠ Motivo Pendente':_motivoReprovacaoPendente(c)?'SIM':'','Motivo Reprovação':c.motivoReprovacao||'','Observações':c.observacoes||'','Data Inclusão':fmt(c.dataInclusao)||''}));
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Candidatos');
   XLSX.writeFile(wb,`candidatos_gps_${today()}.xlsx`);
@@ -5009,7 +5470,7 @@ function exportAnalyticsPDF() {
   const cands = DB.candidatos();
   const aprov=cands.filter(c=>c.statusProcesso==='APROVADO').length;
   const reprov=cands.filter(c=>c.statusProcesso==='REPROVADO').length;
-  const analise=cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const analise=cands.filter(_isEmAnalise).length;
   doc.setFillColor(10,22,40); doc.rect(0,0,210,22,'F');
   doc.setTextColor(255,255,255); doc.setFontSize(15); doc.setFont(undefined,'bold');
   doc.text('GRUPO GPS – Relatório Analytics', 14, 14);
@@ -5108,7 +5569,7 @@ function renderRelatorio() {
   const total    = cands.length;
   const aprov    = cands.filter(c=>c.statusProcesso==='APROVADO').length;
   const reprov   = cands.filter(c=>c.statusProcesso==='REPROVADO').length;
-  const analise  = cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const analise  = cands.filter(_isEmAnalise).length;
   const admitidos= cands.filter(c=>c.admitido).length;
   const taxa     = total ? Math.round(aprov/total*100) : 0;
   const taxaConv = total ? Math.round(admitidos/total*100) : 0;
@@ -5406,7 +5867,7 @@ function exportRelatorioGerencialPDF() {
   const total     = cands.length;
   const aprov     = cands.filter(c=>c.statusProcesso==='APROVADO').length;
   const reprov    = cands.filter(c=>c.statusProcesso==='REPROVADO').length;
-  const analise   = cands.filter(c=>c.statusProcesso==='EM_ANALISE').length;
+  const analise   = cands.filter(_isEmAnalise).length;
   const admitidos = cands.filter(c=>c.admitido).length;
   const taxa      = total ? Math.round(aprov/total*100) : 0;
   const taxaConv  = total ? Math.round(admitidos/total*100) : 0;
@@ -5651,14 +6112,14 @@ function exportRelatorioGerencialPDF() {
     return { nome, total: totalF,
       aprov: subset.filter(c=>c.statusProcesso==='APROVADO').length,
       reprov: subset.filter(c=>c.statusProcesso==='REPROVADO').length,
-      analise: subset.filter(c=>c.statusProcesso==='EM_ANALISE').length };
+      analise: subset.filter(_isEmAnalise).length };
   });
   const recRows = rankRec.map(([nome,totalR])=>{
     const subset = cands.filter(c=>(c.recrutadorNome||c.recrutadorId)===nome);
     return { nome, total: totalR,
       aprov: subset.filter(c=>c.statusProcesso==='APROVADO').length,
       reprov: subset.filter(c=>c.statusProcesso==='REPROVADO').length,
-      analise: subset.filter(c=>c.statusProcesso==='EM_ANALISE').length };
+      analise: subset.filter(_isEmAnalise).length };
   });
 
   y = dataTable('Detalhamento por Feirão', feiraoRows, y) + 10;
@@ -6293,12 +6754,18 @@ function statusBadge(s) {
   return `<span class="badge ${map[s]||'badge-gray'}">${statusLabel(s)}</span>`;
 }
 function statusLabel(s) {
-  return {APROVADO:'Aprovado',REPROVADO:'Reprovado',EM_ANALISE:'Em Análise'}[s]||s;
+  return {APROVADO:'Aprovado',REPROVADO:'Reprovado',EM_ANALISE:'Em Análise'}[s] || (s ? s : 'Pendente');
 }
-function antBadge(s) { return s==='APROVADO'?'<span class="badge badge-green">Aprovado</span>':'<span class="badge badge-red">Reprovado</span>'; }
+// Antes: sem valor caía sempre em "Reprovado". Agora, vazio (pendente de
+// importação/ajuste) mostra "Pendente" em cinza, sem presumir reprovação.
+function antBadge(s) {
+  if(s==='APROVADO') return '<span class="badge badge-green">Aprovado</span>';
+  if(s==='REPROVADO') return '<span class="badge badge-red">Reprovado</span>';
+  return '<span class="badge badge-gray">Pendente</span>';
+}
 function reconBadge(s) {
   const m={APROVADO:'<span class="badge badge-green">Aprovado</span>',REPROVADO:'<span class="badge badge-red">Reprovado</span>',NUNCA_TRABALHOU_NA_GPS:'<span class="badge badge-blue">Nunca GPS</span>'};
-  return m[s]||`<span class="badge badge-gray">${s||'—'}</span>`;
+  return m[s]||'<span class="badge badge-gray">Pendente</span>';
 }
 function maskCPF(i) {
   let v=i.value.replace(/\D/g,'').substring(0,11);
@@ -6462,10 +6929,15 @@ async function initApp() {
 
   window._appReady = true;
   await seedIfEmpty();
+  await autoEncerrarFeiroesVencidos();
   populateFeiraoSelects();
   populateAnRecSelect();
   populateMesAnoSelects();
   renderDashboard();
+
+  // Reverifica a cada hora — cobre o caso do sistema ficar aberto numa aba
+  // e a data virar (ex: alguém deixa a tela aberta passando da meia-noite).
+  setInterval(autoEncerrarFeiroesVencidos, 60 * 60 * 1000);
 }
 
 initApp();
