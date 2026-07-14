@@ -1461,6 +1461,16 @@ thead th {
           <option value="DOCUMENTACAO">📄 Documentação</option>
           <option value="ADMITIDO">✅ Admitido</option>
         </select>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:.72rem;font-weight:700;color:var(--gray-600)">Idade Mínima</label>
+            <input id="f-idade-min" type="number" placeholder="De" min="0" max="120" onchange="renderCandidatos(true)" style="width:70px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:8px;font-size:.83rem"/>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:.72rem;font-weight:700;color:var(--gray-600)">Idade Máxima</label>
+            <input id="f-idade-max" type="number" placeholder="Até" min="0" max="120" onchange="renderCandidatos(true)" style="width:70px;padding:7px 10px;border:1px solid var(--gray-300);border-radius:8px;font-size:.83rem"/>
+          </div>
+        </div>
         <div style="position:relative;display:inline-block">
           <button id="f-pend-group-btn" onclick="togglePendFilterMenu(event)" title="Filtrar candidatos pendentes"
             style="display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;cursor:pointer;font-size:.8rem;color:#92400e;font-weight:600">
@@ -1522,6 +1532,7 @@ thead th {
 </th>
                 <th data-sort="nome" onclick="setCandSort('nome')" style="cursor:pointer;user-select:none" title="Ordenar por Nome">Nome <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
                 <th data-sort="cpf" onclick="setCandSort('cpf')" style="cursor:pointer;user-select:none" title="Ordenar por CPF">CPF <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
+                <th data-sort="idade" onclick="setCandSort('idade')" style="cursor:pointer;user-select:none" title="Ordenar por Idade">Idade <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
                 <th data-sort="cargo" onclick="setCandSort('cargo')" style="cursor:pointer;user-select:none" title="Ordenar por Cargo">Cargo <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
                 <th data-sort="cidade" onclick="setCandSort('cidade')" style="cursor:pointer;user-select:none" title="Ordenar por Cidade">Cidade <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
                 <th data-sort="feiraoNome" onclick="setCandSort('feiraoNome')" style="cursor:pointer;user-select:none" title="Ordenar por Feirão">Feirão <span class="sort-arrow" style="font-size:.65rem;opacity:.25">▲</span></th>
@@ -1761,6 +1772,9 @@ thead th {
                   <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
                 </select>
                 <input id="imp-filtro-ano" type="number" placeholder="Ano" min="2000" max="2099" oninput="populateImpFeiraoSelect()" style="width:80px;border:1px solid var(--gray-300);border-radius:8px;padding:6px 8px;font-size:.8rem"/>
+                <select id="imp-filtro-recrutador" onchange="populateImpFeiraoSelect()" style="border:1px solid var(--gray-300);border-radius:8px;padding:6px 8px;font-size:.8rem;background:var(--white);color:var(--gray-700)">
+                  <option value="">Todos os Recrutadores</option>
+                </select>
               </div>
             </div>
             <div class="form-group" style="margin-bottom:14px">
@@ -1942,6 +1956,10 @@ thead th {
           <div class="form-group">
             <label>Telefone</label>
             <input id="mc-tel" type="text" placeholder="(00) 00000-0000" oninput="maskTel(this)"/>
+          </div>
+          <div class="form-group">
+            <label>Idade</label>
+            <input id="mc-idade" type="number" placeholder="Ex: 25" min="0" max="120"/>
           </div>
           <input id="mc-cr" type="hidden"/>
           <div class="form-group">
@@ -2554,7 +2572,7 @@ function refreshPage(page) {
   if(page==='dashboard') { populateFeiraoSelects(); populateAnRecSelect(); populateMesAnoSelects(); renderDashboard(); }
   if(page==='candidatos') { populateFeiraoSelects(); populateAnRecSelect(); renderCandidatos(); }
   if(page==='calendario') { populateFeiraoSelects(); populateAnRecSelect(); renderCalendar(); renderFeiraos(); }
-  if(page==='importar') populateFeiraoSelects();
+  if(page==='importar') { populateFeiraoSelects(); populateAnRecSelect(); }
   if(page==='recrutadores') renderRecrutadores();
 }
 
@@ -2610,13 +2628,39 @@ function populateFeiraoSelects() {
     if(val) sel.value = val;
   });
   populateImpFeiraoSelect();
-  // Popula o multi-seleção de feirões dos filtros (página Calendário, Candidatos e Analytics)
+  // Popula o multi-seleção de feirões dos filtros (página Calendário, Candidatos e Analytics),
+  // restringindo às opções compatíveis com o(s) recrutador(es) já selecionado(s) no msel irmão.
   if(window.mselSetOptions) {
     const opts = feiraos.map(f => ({value:f.id, label:f.nomeFeirao}));
-    mselSetOptions('msel-feirao', opts);
-    mselSetOptions('msel-feirao-cand', opts);
-    mselSetOptions('msel-feirao-an', opts);
+    mselSetOptions('msel-feirao', mselFilterFeiraoOptsByRec(opts, feiraos, 'msel-rec'));
+    mselSetOptions('msel-feirao-cand', mselFilterFeiraoOptsByRec(opts, feiraos, 'msel-rec-cand'));
+    mselSetOptions('msel-feirao-an', mselFilterFeiraoOptsByRec(opts, feiraos, 'msel-rec-an'));
   }
+}
+
+// ── Filtro cruzado Feirão ↔ Recrutador (usado nos msel das telas Calendário,
+//    Candidatos e Analytics): cada feirão tem um único recrutador responsável
+//    (f.recrutadorId), então dá pra restringir as opções de um com base na
+//    seleção do outro nos dois sentidos.
+// Retorna todos os IDs de recrutador vinculados a um feirão: o principal
+// (f.recrutadorId) mais os eventuais recrutadores extras (f.recrutadoresExtras).
+function _feiraoRecIds(f) {
+  const ids = f.recrutadorId ? [f.recrutadorId] : [];
+  if(Array.isArray(f.recrutadoresExtras)) f.recrutadoresExtras.forEach(r => { if(r && r.id) ids.push(r.id); });
+  return ids;
+}
+function mselFilterFeiraoOptsByRec(opts, feiraos, recMselId) {
+  const selRec = mselGetSelected(recMselId);
+  if(!selRec.size) return opts;
+  const allowedIds = new Set(feiraos.filter(f => _feiraoRecIds(f).some(id => selRec.has(id))).map(f => f.id));
+  return opts.filter(o => allowedIds.has(o.value));
+}
+function mselFilterRecOptsByFeirao(opts, feiraos, feiraoMselId) {
+  const selFeirao = mselGetSelected(feiraoMselId);
+  if(!selFeirao.size) return opts;
+  const allowedIds = new Set();
+  feiraos.filter(f => selFeirao.has(f.id)).forEach(f => _feiraoRecIds(f).forEach(id => allowedIds.add(id)));
+  return opts.filter(o => allowedIds.has(o.value));
 }
 
 // ── Popula o select "Feirão de destino" da tela de Importação, respeitando
@@ -2628,11 +2672,13 @@ function populateImpFeiraoSelect() {
   const qs  = document.getElementById('imp-filtro-status')?.value||'';
   const qm  = document.getElementById('imp-filtro-mes')?.value||'';
   const qa  = document.getElementById('imp-filtro-ano')?.value||'';
+  const qr  = document.getElementById('imp-filtro-recrutador')?.value||'';
   const val = sel.value;
   const feiraos = DB.feiraos().filter(f => {
     if(qs && f.statusFeirao !== qs) return false;
     if(qm && (f.dataEvento||'').slice(5,7) !== qm) return false;
     if(qa && (f.dataEvento||'').slice(0,4) !== String(qa)) return false;
+    if(qr && !_feiraoRecIds(f).includes(qr)) return false;
     return true;
   });
   sel.innerHTML = '';
@@ -2648,7 +2694,7 @@ function populateImpFeiraoSelect() {
 }
 
 function populateAnRecSelect() {
-  const recIds = ['an-rec'];
+  const recIds = ['an-rec', 'imp-filtro-recrutador'];
   recIds.forEach(id => {
     const sel = document.getElementById(id);
     if(!sel) return;
@@ -2661,12 +2707,14 @@ function populateAnRecSelect() {
     });
     if(val) sel.value = val;
   });
-  // Popula o multi-seleção de recrutadores dos filtros (página Calendário, Candidatos e Analytics)
+  // Popula o multi-seleção de recrutadores dos filtros (página Calendário, Candidatos e Analytics),
+  // restringindo às opções compatíveis com o(s) feirão(ões) já selecionado(s) no msel irmão.
   if(window.mselSetOptions) {
+    const feiraos = DB.feiraos();
     const opts = DB.recrutadores().map(r => ({value:r.id, label:r.nome}));
-    mselSetOptions('msel-rec', opts);
-    mselSetOptions('msel-rec-cand', opts);
-    mselSetOptions('msel-rec-an', opts);
+    mselSetOptions('msel-rec', mselFilterRecOptsByFeirao(opts, feiraos, 'msel-feirao'));
+    mselSetOptions('msel-rec-cand', mselFilterRecOptsByFeirao(opts, feiraos, 'msel-feirao-cand'));
+    mselSetOptions('msel-rec-an', mselFilterRecOptsByFeirao(opts, feiraos, 'msel-feirao-an'));
   }
 }
 
@@ -2743,6 +2791,7 @@ function mselOnCheck(id, input) {
   }
   mselUpdateLabel(id);
   mselSyncAllCheckbox(id);
+  mselAfterSelectionChange(id);
   mselTriggerRender(id);
 }
 
@@ -2765,6 +2814,7 @@ function mselToggleAll(id, checked) {
   });
   mselUpdateLabel(id);
   mselSyncAllCheckbox(id);
+  mselAfterSelectionChange(id);
   mselTriggerRender(id);
 }
 
@@ -2804,6 +2854,7 @@ function mselClearAll(id) {
   });
   mselUpdateLabel(id);
   mselSyncAllCheckbox(id);
+  mselAfterSelectionChange(id);
   mselTriggerRender(id);
 }
 
@@ -2820,6 +2871,7 @@ function mselClearAllSilent(id) {
   });
   mselUpdateLabel(id);
   mselSyncAllCheckbox(id);
+  mselAfterSelectionChange(id);
 }
 
 const MSEL_PLACEHOLDERS = {
@@ -2847,6 +2899,20 @@ function mselGetSelected(id) {
   return window._mselSelections[id] || new Set();
 }
 
+// ── Após qualquer mudança de seleção num msel de Feirão ou Recrutador,
+//    re-sincroniza as opções do msel irmão (na mesma tela) para refletir
+//    somente os itens relacionados, e reaplica o texto de busca interno
+//    que porventura esteja digitado em cada dropdown.
+function mselAfterSelectionChange(id) {
+  populateFeiraoSelects();
+  populateAnRecSelect();
+  ['msel-feirao','msel-rec','msel-feirao-cand','msel-rec-cand','msel-feirao-an','msel-rec-an'].forEach(mid => {
+    const panel = document.getElementById(mid+'-panel');
+    const input = panel && panel.querySelector('.msel-search-input');
+    if(input && input.value) mselFilter(mid, input.value);
+  });
+}
+
 // Seleciona programaticamente um único valor (usado ao navegar de um Feirão
 // específico para a tela de Candidatos, ex: botão "Ver candidatos").
 function mselSetSingle(id, value) {
@@ -2866,6 +2932,7 @@ function mselSetSingle(id, value) {
   }
   mselUpdateLabel(id);
   mselSyncAllCheckbox(id);
+  mselAfterSelectionChange(id);
 }
 
 // ── Popula os seletores de Mês/Ano (filtro do Dashboard e exportação do
@@ -3447,6 +3514,7 @@ function _candSortValue(c, field) {
   switch (field) {
     case 'nome':        return normStr(c.nome||'');
     case 'cpf':          return (c.cpf||'').replace(/\D/g,'');
+    case 'idade':        return c.idade ? c.idade : 999;
     case 'cargo':        return normStr(c.cargo||'');
     case 'cidade':       return normStr(c.cidade||c.feiraoLocal||'');
     case 'feiraoNome':   return normStr(c.feiraoNome||'');
@@ -3527,6 +3595,7 @@ function openCandModal(id=null) {
     document.getElementById('mc-nome').value = c.nome;
     document.getElementById('mc-cpf').value = c.cpf;
     document.getElementById('mc-tel').value = c.telefone||'';
+    document.getElementById('mc-idade').value = c.idade||'';
     document.getElementById('mc-cr').value = c.cr||'';
     document.getElementById('mc-cargo').value = c.cargo||'';
     document.getElementById('mc-cidade').value = c.cidade||'';
@@ -3543,7 +3612,7 @@ function openCandModal(id=null) {
     toggleEtapaCR();
   } else {
     ['mc-feirao','mc-status','mc-ant','mc-recont','mc-etapa'].forEach(id=>document.getElementById(id).value='');
-    ['mc-nome','mc-cpf','mc-tel','mc-cr','mc-cargo','mc-cidade','mc-endereco','mc-rec','mc-motivo','mc-obs','mc-cr-visible'].forEach(id=>document.getElementById(id).value='');
+    ['mc-nome','mc-cpf','mc-tel','mc-idade','mc-cr','mc-cargo','mc-cidade','mc-endereco','mc-rec','mc-motivo','mc-obs','mc-cr-visible'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('mc-admitido').checked = false;
     toggleEtapaCR();
   }
@@ -3625,6 +3694,7 @@ async function saveCandidato() {
   const nome = document.getElementById('mc-nome').value.trim();
   const cpf = document.getElementById('mc-cpf').value.trim();
   const tel = document.getElementById('mc-tel').value.trim();
+  const idade = document.getElementById('mc-idade').value.trim() ? parseInt(document.getElementById('mc-idade').value) : null;
   const cr = document.getElementById('mc-cr').value.trim();
   const cargo = document.getElementById('mc-cargo').value.trim();
   const cidade = document.getElementById('mc-cidade').value.trim();
@@ -3654,7 +3724,7 @@ async function saveCandidato() {
   const existente = editCandId ? cands.find(x=>x.id===editCandId) : null;
   const c = {
     id: editCandId||uid(), feiraoId: fid, feiraoNome: f.nomeFeirao, feiraoLocal: f.localEvento,
-    nome, cpf, telefone:tel, cr: crVisivel || cr, cargo, cidade, endereco, admitido, etapaProcesso,
+    nome, cpf, telefone:tel, idade, cr: crVisivel || cr, cargo, cidade, endereco, admitido, etapaProcesso,
     statusProcesso:status, antecedentes:ant,
     recontratacao:recont, motivoReprovacao:motivo, observacoes:obs,
     recrutadorId: f.recrutadorId, recrutadorNome: f.recrutadorNome, bancoTalentosFlag: false,
@@ -3710,6 +3780,7 @@ function viewCandidato(id) {
       <div><span class="text-muted text-sm">Nome</span><p style="font-weight:700;margin-top:2px">${esc(c.nome)} ${bt}</p></div>
       <div><span class="text-muted text-sm">CPF</span><p style="font-weight:600;margin-top:2px">${esc(c.cpf)}</p></div>
       <div><span class="text-muted text-sm">Telefone</span><p style="margin-top:2px">${esc(c.telefone)||'—'}</p></div>
+      <div><span class="text-muted text-sm">Idade</span><p style="margin-top:2px">${c.idade?c.idade+' anos':'—'}</p></div>
       <div><span class="text-muted text-sm">Cargo Pretendido</span><p style="margin-top:2px">${esc(c.cargo)||'—'}</p></div>
       <div><span class="text-muted text-sm">Cidade</span><p style="margin-top:2px">${esc(c.cidade||c.feiraoLocal||'—')}</p></div>
       <div><span class="text-muted text-sm">Etapa do Processo</span><p style="margin-top:2px">${etapaBadge(c.etapaProcesso)}</p></div>
@@ -3798,6 +3869,8 @@ function getFilteredCandidatos() {
   const qrecont= document.getElementById('f-recont-cand')?.value||'';
   const qadm   = document.getElementById('f-admitido-cand')?.value||'';
   const qetapa = document.getElementById('f-etapa-cand')?.value||'';
+  const qIdadeMin = parseInt(document.getElementById('f-idade-min')?.value||'0') || 0;
+  const qIdadeMax = parseInt(document.getElementById('f-idade-max')?.value||'999') || 999;
   const qPendente = document.getElementById('f-motivo-pendente')?.checked || false;
   const qImportPendente = document.getElementById('f-import-pendente')?.checked || false;
   const qDigits = q ? q.replace(/[^0-9]/g,'') : '';
@@ -3805,7 +3878,8 @@ function getFilteredCandidatos() {
   const qCidadeCargo = document.getElementById('f-nome-cidade-cargo')?.checked || false;
 
   // Sem nenhum filtro ativo: retorna tudo sem iterar
-  if (!fid.size && !q && !qr.size && !qs && !qa && !qrecont && !qadm && !qetapa && !qPendente && !qImportPendente) return cands;
+  const temFiltroIdade = qIdadeMin > 0 || qIdadeMax < 999;
+  if (!fid.size && !q && !qr.size && !qs && !qa && !qrecont && !qadm && !qetapa && !qPendente && !qImportPendente && !temFiltroIdade) return cands;
 
   return cands.filter(c => {
     if (fid.size && !fid.has(c.feiraoId)) return false;
@@ -3815,6 +3889,7 @@ function getFilteredCandidatos() {
     if (qrecont&& !(qrecont==='PENDENTE' ? !c.recontratacao : c.recontratacao === qrecont)) return false;
     if (qadm   && (qadm === '1' ? !c.admitido : c.admitido)) return false;
     if (qetapa && c.etapaProcesso !== qetapa) return false;
+    if (temFiltroIdade && (c.idade < qIdadeMin || c.idade > qIdadeMax)) return false;
     if (qPendente || qImportPendente) {
       const matchMotivoEtapa = qPendente && _temPendencia(c);
       const matchImportacao  = qImportPendente && _importPendente(c);
@@ -3849,7 +3924,7 @@ function renderCandidatos(resetPage=false) {
   document.getElementById('cand-count-label').textContent = `${total} candidato(s) — exibindo ${showing}`;
 
   const tbody = document.getElementById('candidatos-tbody');
-  if(!page.length){tbody.innerHTML=`<tr><td colspan="14" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();renderCandPagination(0,1,1);_updateCandSortIndicators();return;}
+  if(!page.length){tbody.innerHTML=`<tr><td colspan="15" class="no-data">Nenhum candidato encontrado</td></tr>`;updateBulkBar();renderCandPagination(0,1,1);_updateCandSortIndicators();return;}
   tbody.innerHTML = page.map(c => {
     const pendente = _motivoReprovacaoPendente(c);
     const reprovado = _isReprovadoConsolidado(c);
@@ -3862,6 +3937,7 @@ function renderCandidatos(resetPage=false) {
     <td style="width:32px"><input type="checkbox" class="cand-chk" data-id="${c.id}" onclick="updateBulkBar()" style="cursor:pointer;width:14px;height:14px"/></td>
     <td style="min-width:160px;max-width:200px;overflow:hidden;text-overflow:ellipsis"><strong style="cursor:pointer;color:var(--blue-700)" onclick="viewCandidato('${c.id}')" title="${esc(c.nome)}">${icone}${esc(c.nome)}</strong></td>
     <td style="min-width:110px">${esc(c.cpf)}</td>
+    <td style="text-align:center;min-width:50px">${c.idade?c.idade:''}</td>
     <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.cargo||'')}">${esc(c.cargo)||'—'}</td>
     <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.cidade||c.feiraoLocal||'')}">${esc(c.cidade||c.feiraoLocal||'—')}</td>
     <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${esc(c.feiraoNome)}">${esc(c.feiraoNome)}</td>
@@ -3925,7 +4001,7 @@ function candGoPage(p) {
   const tbody = document.getElementById('candidatos-tbody');
   if (tbody) {
     tbody.innerHTML = Array(5).fill(0).map(() => `<tr style="opacity:.4">
-      ${Array(14).fill(0).map(() => `<td><div style="height:12px;background:var(--gray-200);border-radius:4px;animation:_pulse 1s infinite alternate"></div></td>`).join('')}
+      ${Array(15).fill(0).map(() => `<td><div style="height:12px;background:var(--gray-200);border-radius:4px;animation:_pulse 1s infinite alternate"></div></td>`).join('')}
     </tr>`).join('');
     if (!document.getElementById('_pulse-style')) {
       const s = document.createElement('style');
@@ -3951,7 +4027,7 @@ function clearCandFilters() {
   updatePendFilterBadge();
   mselClearAllSilent('msel-feirao-cand');
   mselClearAllSilent('msel-rec-cand');
-  ['f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand'].forEach(id=>document.getElementById(id).value='');
+  ['f-status-cand','f-ant-cand','f-recont-cand','f-admitido-cand','f-etapa-cand','f-idade-min','f-idade-max'].forEach(id=>document.getElementById(id).value='');
   updateStatusFilterBadge();
   renderCandidatos(true);
 }
@@ -4667,6 +4743,7 @@ const IMPORT_FIELD_MAP = {
   nome:             ['nome','nome completo','candidato','nome do candidato','name','nome candidato','nomecandidato'],
   cpf:              ['cpf','documento','cpf candidato','nr cpf','numero cpf','doc','rg cpf','identificacao'],
   telefone:         ['telefone','celular','contato','fone','whatsapp','tel','telefone celular','numero','numero telefone','phone'],
+  idade:            ['idade','age','anos','age candidato','idade candidato'],
   cr:               ['cr','codigo','registro','cr codigo','cod registro','n registro'],
   cargo:            ['cargo','cargo pretendido','funcao','vaga','posicao','cargo funcao','cargo vaga','pretendido'],
   cidade:           ['cidade','cidade uf','cidade/uf','local','localidade','municipio','cidade estado','uf','cidade-uf','cidadeuf'],
@@ -4733,10 +4810,13 @@ function extractImportRow(r) {
   const admitidoVal = isSim(getCol(r,...IMPORT_FIELD_MAP.admitido));
   const etapaRaw    = mapEtapa(getCol(r,...IMPORT_FIELD_MAP.etapaProcesso));
   const etapaFinal  = etapaRaw || (admitidoVal ? 'ADMITIDO' : '');
+  const idadeRaw    = String(getCol(r,...IMPORT_FIELD_MAP.idade)).trim();
+  const idade       = idadeRaw ? parseInt(idadeRaw) : null;
   return {
     nome: String(getCol(r,...IMPORT_FIELD_MAP.nome)).trim(),
     cpf: String(getCol(r,...IMPORT_FIELD_MAP.cpf)).trim(),
     telefone: String(getCol(r,...IMPORT_FIELD_MAP.telefone)).trim(),
+    idade: idade,
     cr: String(getCol(r,...IMPORT_FIELD_MAP.cr)).trim(),
     cargo: String(getCol(r,...IMPORT_FIELD_MAP.cargo)).trim(),
     cidade: String(getCol(r,...IMPORT_FIELD_MAP.cidade)).trim(),
@@ -5120,7 +5200,7 @@ async function runImport(f, recrutadorId, recrutadorNome) {
 
 function downloadTemplate() {
   // ── Definição das colunas na mesma ordem do modelo oficial ──
-  const COLS = ['nome','cpf','telefone','cargo','cidade','endereco','admitido',
+  const COLS = ['nome','cpf','telefone','idade','cargo','cidade','endereco','admitido',
     'statusProcesso','antecedentes','recontratacao','etapaProcesso',
     'motivoReprovacao','observacoes','dataInclusao'];
 
@@ -5128,6 +5208,7 @@ function downloadTemplate() {
     'Nome e sobrenome do candidato',
     'Formato: 000.000.000-00',
     'Formato: (00) 00000-0000',
+    'Opcional — idade em anos (números 0-120)',
     'Ex: Auxiliar de Limpeza, Vigilante…',
     'Formato: Cidade - UF  (ex: São Paulo - SP)',
     'Endereço completo com bairro',
@@ -5142,7 +5223,7 @@ function downloadTemplate() {
   ];
 
   const EXAMPLE = ['João da Silva','123.456.789-00','(11) 91234-5678',
-    'Auxiliar de Limpeza','São Paulo - SP','Rua das Flores, 123 – Centro, São Paulo - SP',
+    '28','Auxiliar de Limpeza','São Paulo - SP','Rua das Flores, 123 – Centro, São Paulo - SP',
     'SIM','APROVADO','APROVADO','NUNCA_TRABALHOU_NA_GPS','CAPTACAO',
     '','Candidato pontual e bem apresentado.','15/01/2025'];
 
@@ -5166,7 +5247,7 @@ function downloadTemplate() {
 
   // ── Larguras das colunas ──
   ws['!cols'] = [
-    {wch:22},{wch:15},{wch:15},{wch:20},{wch:16},{wch:32},
+    {wch:22},{wch:15},{wch:15},{wch:7},{wch:20},{wch:16},{wch:32},
     {wch:11},{wch:16},{wch:14},{wch:22},{wch:16},{wch:24},{wch:28},{wch:13}
   ];
 
